@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
               type: "image",
               source: {
                 type: "base64",
-                media_type: image.type as "image/jpeg" | "image/png" | "image/gif" | "image/webkitp",
+                media_type: image.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
                 data: base64Image,
               },
             },
@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Failed to extract text' }, { status: 500 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Claude OCR Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
   }
 }

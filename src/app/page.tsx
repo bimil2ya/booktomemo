@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Camera, Search, Trash2, AlertCircle } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
@@ -88,7 +88,7 @@ export default function Home() {
 
   const sendToShortcut = async (book: Book) => {
     const savedBooks = JSON.parse(localStorage.getItem('saved_books') || '[]');
-    const isDuplicate = savedBooks.some((b: any) => b.isbn === book.isbn);
+    const isDuplicate = savedBooks.some((b: Book) => b.isbn === book.isbn);
 
     if (isDuplicate) {
       if (!confirm('이미 메모로 보낸 책입니다. 다시 보낼까요?')) {
