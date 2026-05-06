@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Search, Trash2, AlertCircle } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
@@ -23,9 +23,26 @@ export default function Home() {
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
   const VERSION = "v1.0.3";
 
-  const searchBooks = async (searchQuery: string) => {
+  // 페이지 로드 시 URL에 검색어가 있으면 바로 검색 실행
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) {
+      setQuery(q);
+      searchBooks(q, false); // URL 업데이트는 하지 않음
+    }
+  }, []);
+
+  const searchBooks = async (searchQuery: string, updateUrl = true) => {
     if (!searchQuery) return;
     setLoading(true);
+    
+    // URL에 검색어 반영 (돌아왔을 때 결과 유지를 위함)
+    if (updateUrl) {
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?q=' + encodeURIComponent(searchQuery);
+      window.history.pushState({ path: newUrl }, '', newUrl);
+    }
+
     try {
       const res = await fetch(
         "https://dapi.kakao.com/v3/search/book?query=" + encodeURIComponent(searchQuery),
@@ -106,9 +123,10 @@ export default function Home() {
     
     const textInput = JSON.stringify(inputData);
     const shortcutName = 'BookToMemo';
-    const callbackUrl = window.location.origin;
     
-    // x-callback-url 방식을 사용하여 실행 후 다시 앱으로 돌아오게 함
+    // 현재 검색 결과가 포함된 URL을 복귀 주소로 사용
+    const callbackUrl = window.location.href;
+    
     const url = "shortcuts://x-callback-url/run-shortcut?name=" + encodeURIComponent(shortcutName) + 
                 "&x-success=" + encodeURIComponent(callbackUrl) +
                 "&input=text&text=" + encodeURIComponent(textInput);
@@ -117,7 +135,7 @@ export default function Home() {
       localStorage.setItem('saved_books', JSON.stringify([...savedBooks, { isbn: book.isbn, title: book.title }]));
     }
 
-    // 단축어 직접 실행 (공유 시트 거치지 않음)
+    // 단축어 직접 실행
     window.location.href = url;
   };
 
