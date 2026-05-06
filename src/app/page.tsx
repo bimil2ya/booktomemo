@@ -105,30 +105,15 @@ export default function Home() {
     };
     
     const textInput = JSON.stringify(inputData);
+    const shortcutName = 'BookToMemo';
+    const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + "&input=text&text=" + encodeURIComponent(textInput);
 
-    // iOS 공유 시트 호출
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: book.title,
-          text: textInput,
-        });
-        
-        if (!isDuplicate) {
-          localStorage.setItem('saved_books', JSON.stringify([...savedBooks, { isbn: book.isbn, title: book.title }]));
-        }
-      } catch (error) {
-        console.log('공유 취소 또는 에러:', error);
-      }
-    } else {
-      const shortcutName = 'BookToMemo';
-      const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + "&input=text&text=" + encodeURIComponent(textInput);
-      
-      if (!isDuplicate) {
-        localStorage.setItem('saved_books', JSON.stringify([...savedBooks, { isbn: book.isbn, title: book.title }]));
-      }
-      window.location.href = url;
+    if (!isDuplicate) {
+      localStorage.setItem('saved_books', JSON.stringify([...savedBooks, { isbn: book.isbn, title: book.title }]));
     }
+
+    // 단축어 직접 실행 (공유 시트 거치지 않음)
+    window.location.href = url;
   };
 
   return (
