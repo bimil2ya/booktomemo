@@ -106,7 +106,12 @@ export default function Home() {
     
     const textInput = JSON.stringify(inputData);
     const shortcutName = 'BookToMemo';
-    const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + "&input=text&text=" + encodeURIComponent(textInput);
+    const callbackUrl = window.location.origin;
+    
+    // x-callback-url 방식을 사용하여 실행 후 다시 앱으로 돌아오게 함
+    const url = "shortcuts://x-callback-url/run-shortcut?name=" + encodeURIComponent(shortcutName) + 
+                "&x-success=" + encodeURIComponent(callbackUrl) +
+                "&input=text&text=" + encodeURIComponent(textInput);
 
     if (!isDuplicate) {
       localStorage.setItem('saved_books', JSON.stringify([...savedBooks, { isbn: book.isbn, title: book.title }]));
