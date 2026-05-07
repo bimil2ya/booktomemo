@@ -57,7 +57,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.3.0";
+  const VERSION = "v1.3.1";
 
   // 초기 마운트 시 설정 불러오기
   useEffect(() => {
@@ -208,7 +208,8 @@ export default function Home() {
     const { error } = await supabase.from('books').insert([newBook]);
 
     if (error) {
-      alert('저장 중 오류가 발생했습니다.');
+      console.error('Supabase Save Error:', error);
+      alert('저장 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
     } else {
       if (saveMode === 'shortcut') {
         const url = "shortcuts://run-shortcut?name=BookToMemo&input=text&text=" + 
@@ -229,7 +230,8 @@ export default function Home() {
       .eq('id', editingId);
 
     if (error) {
-      alert('수정 중 오류가 발생했습니다.');
+      console.error('Supabase Update Error:', error);
+      alert('수정 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
     } else {
       setEditingId(null);
       fetchSavedBooks();
@@ -240,7 +242,8 @@ export default function Home() {
     if (!confirm('보관함에서 삭제하시겠습니까?')) return;
     const { error } = await supabase.from('books').delete().eq('id', id);
     if (error) {
-      alert('삭제 중 오류가 발생했습니다.');
+      console.error('Supabase Delete Error:', error);
+      alert('삭제 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
     } else {
       fetchSavedBooks();
     }
