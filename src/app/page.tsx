@@ -1,14 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Search, Trash2, AlertCircle, Save, X, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, ArrowUpDown } from 'lucide-react';
+import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
-import { createClient } from '@supabase/supabase-js';
-
-// Supabase 설정
-const SUPABASE_URL = 'https://jmfgxmpgedcxyvaclci.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_ifts273gFtkSiY1SZBxNWg_lnSIKD-m';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import axios from 'axios';
+import { getBooksAction, saveBookAction, updateBookAction, deleteBookAction } from './actions';
 
 interface Book {
   title: string;
@@ -44,6 +40,7 @@ export default function Home() {
   const [books, setBooks] = useState<Book[]>([]);
   const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingIsbn, setSavingIsbn] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [saveMode, setSaveMode] = useState<'shortcut' | 'native'>('native');
@@ -57,7 +54,10 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.3.2";
+  const VERSION = "v1.5.5";
+
+  // 상세 모달 상태
+  const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
 
   // 초기 마운트 시 설정 불러오기
   useEffect(() => {
@@ -85,16 +85,12 @@ export default function Home() {
 
   const fetchSavedBooks = async () => {
     if (!libraryName) return;
-    const { data, error } = await supabase
-      .from('books')
-      .select('*')
-      .eq('owner_name', libraryName)
-      .order(sortColumn, { ascending: sortOrder === 'asc' });
-
-    if (error) {
-      console.error('Error fetching books:', error);
-    } else {
+    try {
+      const { data, error } = await getBooksAction(libraryName, sortColumn, sortOrder);
+      if (error) throw new Error(error);
       setSavedBooks(data || []);
+    } catch (error) {
+      console.error('Error fetching books:', error);
     }
   };
 
@@ -138,12 +134,11 @@ export default function Home() {
     }
 
     try {
-      const res = await fetch(
-        "https://dapi.kakao.com/v3/search/book?query=" + encodeURIComponent(searchQuery),
-        { headers: { Authorization: "KakaoAK " + KAKAO_KEY } }
-      );
-      const data = await res.json();
-      setBooks(data.documents || []);
+      const res = await axios.get("https://dapi.kakao.com/v3/search/book", {
+        params: { query: searchQuery },
+        headers: { Authorization: "KakaoAK " + KAKAO_KEY }
+      });
+      setBooks(res.data.documents || []);
     } catch (error) {
       console.error('Search failed:', error);
       alert('검색 중 오류가 발생했습니다.');
@@ -163,8 +158,8 @@ export default function Home() {
       const formData = new FormData();
       formData.append('image', compressedFile);
 
-      const res = await fetch("/api/ocr", { method: 'POST', body: formData });
-      const data = await res.json();
+      const res = await axios.post("/api/ocr", formData);
+      const data = res.data;
 
       if (data.title || data.author) {
         const optimizedQuery = `${data.title} ${data.author}`.trim();
@@ -183,24 +178,8 @@ export default function Home() {
   const handleSave = async (book: Book) => {
     if (!libraryName) return;
     
-    setLoading(true); // 저장 중임을 표시
+    setSavingIsbn(book.isbn);
     try {
-      // 1. 중복 체크 (더 안전한 방식으로 수정)
-      const { data: existing, error: checkError } = await supabase
-        .from('books')
-        .select('id')
-        .eq('owner_name', libraryName)
-        .eq('isbn', book.isbn);
-
-      if (checkError) throw checkError;
-
-      if (existing && existing.length > 0) {
-        if (!confirm('이미 저장된 책입니다. 다시 저장할까요?')) {
-          setLoading(false);
-          return;
-        }
-      }
-
       const newBook: Omit<SavedBook, 'id' | 'created_at'> = {
         isbn: book.isbn,
         title: book.title,
@@ -211,10 +190,16 @@ export default function Home() {
         owner_name: libraryName
       };
 
-      // 2. 데이터 삽입
-      const { error: insertError } = await supabase.from('books').insert([newBook]);
+      const { success, error } = await saveBookAction(newBook);
 
-      if (insertError) throw insertError;
+      if (error === 'ALREADY_EXISTS') {
+        if (!confirm('이미 저장된 책입니다. 다시 저장할까요?')) {
+          return;
+        }
+        return;
+      }
+
+      if (error) throw new Error(error);
 
       if (saveMode === 'shortcut') {
         const url = "shortcuts://run-shortcut?name=BookToMemo&input=text&text=" + 
@@ -224,51 +209,63 @@ export default function Home() {
         alert('서재에 저장되었습니다.');
       }
       fetchSavedBooks();
-    } catch (error: any) {
-      console.error('Supabase Operation Error:', error);
-      // 상세 에러 메시지 구성
-      const errorMsg = error.message || '네트워크 연결이 원활하지 않습니다.';
-      const hint = error.code ? `(Error Code: ${error.code})` : '(Network Error)';
-      alert(`저장 실패: ${errorMsg}\n${hint}\n\n도움말: 사파리의 '크로스 사이트 추적 방지' 설정을 끄거나, 네트워크 상태를 확인해 주세요.`);
+    } catch (error: unknown) {
+      console.error('Save Error:', error);
+      let errorMsg = 'Unknown error';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      }
+      alert(`저장 실패: ${errorMsg}\n\n도움말: 네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.`);
     } finally {
-      setLoading(false);
+      setSavingIsbn(null);
     }
   };
 
   const testConnection = async () => {
     try {
-      const { data, error } = await supabase.from('books').select('count', { count: 'exact', head: true }).limit(1);
-      if (error) throw error;
-      alert('서버 연결 성공! 데이터베이스와 정상적으로 통신하고 있습니다.');
-    } catch (error: any) {
-      alert(`서버 연결 실패: ${error.message}\n인터넷 연결이나 Supabase 설정을 확인해 주세요.`);
+      const { error } = await getBooksAction('test', 'created_at', 'desc');
+      if (!error) {
+        alert('서버 연결 성공! 데이터베이스와 정상적으로 통신하고 있습니다.');
+      } else {
+        throw new Error(error);
+      }
+    } catch (error: unknown) {
+      let errorMsg = '알 수 없는 오류';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      }
+      alert(`서버 연결 실패: ${errorMsg}`);
     }
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
-    const { error } = await supabase
-      .from('books')
-      .update(editFormData)
-      .eq('id', editingId);
-
-    if (error) {
-      console.error('Supabase Update Error:', error);
-      alert('수정 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
-    } else {
+    try {
+      const { error } = await updateBookAction(Number(editingId), editFormData);
+      if (error) throw new Error(error);
       setEditingId(null);
       fetchSavedBooks();
+    } catch (error: unknown) {
+      let errorMsg = '알 수 없는 오류';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      }
+      alert('수정 중 오류가 발생했습니다: ' + errorMsg);
     }
   };
 
   const deleteSavedBook = async (id: number) => {
     if (!confirm('보관함에서 삭제하시겠습니까?')) return;
-    const { error } = await supabase.from('books').delete().eq('id', id);
-    if (error) {
-      console.error('Supabase Delete Error:', error);
-      alert('삭제 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
-    } else {
+    try {
+      const { error } = await deleteBookAction(id);
+      if (error) throw new Error(error);
       fetchSavedBooks();
+    } catch (error: unknown) {
+      let errorMsg = '알 수 없는 오류';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      }
+      alert('삭제 중 오류가 발생했습니다: ' + errorMsg);
     }
   };
 
@@ -374,7 +371,7 @@ export default function Home() {
 
             <div className="grid gap-4">
               {books.map((book, idx) => (
-                <div key={idx} className="flex gap-4 p-5 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
+                <div key={idx} onClick={() => setSelectedBook(book)} className="flex gap-4 p-5 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm cursor-pointer hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
                   <img src={book.thumbnail || '/file.svg'} className="w-24 h-32 object-cover rounded-lg shadow-sm" alt={book.title} />
                   <div className="flex-1 flex flex-col justify-between min-w-0">
                     <div>
@@ -383,8 +380,12 @@ export default function Home() {
                       <p className="text-zinc-400 text-xs">{book.publisher}</p>
                       <p className="mt-2 text-zinc-500 text-sm line-clamp-2">{book.contents}</p>
                     </div>
-                    <button onClick={() => handleSave(book)} className={`mt-4 w-full py-2.5 text-white rounded-xl text-sm font-bold ${saveMode === 'shortcut' ? 'bg-zinc-900' : 'bg-purple-600'}`}>
-                      {saveMode === 'shortcut' ? '애플 메모로 보내기' : '서재에 저장'}
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleSave(book); }} 
+                      disabled={savingIsbn === book.isbn}
+                      className={`mt-4 w-full py-2.5 text-white rounded-xl text-sm font-bold transition-all ${savingIsbn === book.isbn ? 'bg-zinc-400 animate-pulse' : (saveMode === 'shortcut' ? 'bg-zinc-900' : 'bg-purple-600')}`}
+                    >
+                      {savingIsbn === book.isbn ? '저장 중...' : (saveMode === 'shortcut' ? '애플 메모로 보내기' : '서재에 저장')}
                     </button>
                   </div>
                 </div>
@@ -399,83 +400,95 @@ export default function Home() {
               </h2>
             </header>
             
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-                    <tr>
-                      <th className="px-4 py-3 text-xs font-bold text-zinc-400 uppercase tracking-wider cursor-pointer" onClick={() => toggleSort('created_at')}>
-                        <div className="flex items-center gap-1">저장일 {sortColumn === 'created_at' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
-                      </th>
-                      <th className="px-4 py-3 text-xs font-bold text-zinc-400 uppercase tracking-wider cursor-pointer" onClick={() => toggleSort('title')}>
-                        <div className="flex items-center gap-1">책 제목 {sortColumn === 'title' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
-                      </th>
-                      <th className="px-4 py-3 text-xs font-bold text-zinc-400 uppercase tracking-wider cursor-pointer" onClick={() => toggleSort('authors')}>
-                        <div className="flex items-center gap-1">저자 {sortColumn === 'authors' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
-                      </th>
-                      <th className="px-4 py-3 text-xs font-bold text-zinc-400 uppercase tracking-wider cursor-pointer" onClick={() => toggleSort('publisher')}>
-                        <div className="flex items-center gap-1">출판사 {sortColumn === 'publisher' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}</div>
-                      </th>
-                      <th className="px-4 py-3 text-xs font-bold text-zinc-400 text-center uppercase tracking-wider">관리</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800">
-                    {savedBooks.map((book) => (
-                      <tr key={book.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
-                        <td className="px-4 py-4 text-xs text-zinc-500 whitespace-nowrap">
-                          {new Date(book.created_at!).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-4">
-                          {editingId === book.id ? (
-                            <input value={editFormData.title || ''} onChange={e => setEditFormData({...editFormData, title: e.target.value})} className="w-full p-1 bg-zinc-100 dark:bg-zinc-700 rounded text-sm"/>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <img src={book.thumbnail} className="w-6 h-8 object-cover rounded shadow-xs" />
-                              <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50 truncate max-w-[150px]">{book.title}</span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          {editingId === book.id ? (
-                            <input value={editFormData.authors || ''} onChange={e => setEditFormData({...editFormData, authors: e.target.value})} className="w-full p-1 bg-zinc-100 dark:bg-zinc-700 rounded text-sm"/>
-                          ) : (
-                            <span className="text-sm text-zinc-600 dark:text-zinc-400 truncate max-w-[100px] block">{book.authors}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          {editingId === book.id ? (
-                            <input value={editFormData.publisher || ''} onChange={e => setEditFormData({...editFormData, publisher: e.target.value})} className="w-full p-1 bg-zinc-100 dark:bg-zinc-700 rounded text-sm"/>
-                          ) : (
-                            <span className="text-sm text-zinc-500 dark:text-zinc-500 truncate max-w-[80px] block">{book.publisher}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            {editingId === book.id ? (
-                              <>
-                                <button onClick={saveEdit} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg"><Check className="w-4 h-4"/></button>
-                                <button onClick={() => setEditingId(null)} className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded-lg"><X className="w-4 h-4"/></button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => { setEditingId(book.id!); setEditFormData(book); }} className="p-1.5 text-zinc-400 hover:text-purple-600 rounded-lg"><Edit2 className="w-4 h-4"/></button>
-                                <button onClick={() => deleteSavedBook(book.id!)} className="p-1.5 text-zinc-400 hover:text-red-500 rounded-lg"><Trash2 className="w-4 h-4"/></button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {savedBooks.length === 0 && (
-                <div className="py-20 text-center space-y-2">
-                  <BookOpen className="w-12 h-12 text-zinc-100 mx-auto" />
-                  <p className="text-zinc-400 text-sm">저장된 책이 없습니다.</p>
-                </div>
-              )}
+            <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+              <button onClick={() => toggleSort('created_at')} className={`flex-none px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1 ${sortColumn === 'created_at' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500'}`}>
+                저장일 {sortColumn === 'created_at' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}
+              </button>
+              <button onClick={() => toggleSort('title')} className={`flex-none px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1 ${sortColumn === 'title' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500'}`}>
+                제목 {sortColumn === 'title' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}
+              </button>
+              <button onClick={() => toggleSort('authors')} className={`flex-none px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1 ${sortColumn === 'authors' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500'}`}>
+                저자 {sortColumn === 'authors' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}
+              </button>
+              <button onClick={() => toggleSort('publisher')} className={`flex-none px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1 ${sortColumn === 'publisher' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500'}`}>
+                출판사 {sortColumn === 'publisher' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}
+              </button>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {savedBooks.map((book) => (
+                <div key={book.id} onClick={() => editingId !== book.id && setSelectedBook(book)} className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 overflow-hidden shadow-sm flex flex-col group transition-all hover:shadow-md cursor-pointer">
+                  <div className="p-4 flex gap-4">
+                    <img src={book.thumbnail || '/file.svg'} className="w-20 h-28 object-cover rounded-xl shadow-xs" alt={book.title} />
+                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                      <div className="space-y-1">
+                        {editingId === book.id ? (
+                          <input 
+                            value={editFormData.title || ''} 
+                            onChange={e => setEditFormData({...editFormData, title: e.target.value})} 
+                            className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-bold border-none focus:ring-1 focus:ring-purple-500"
+                          />
+                        ) : (
+                          <h3 className="font-bold text-zinc-900 dark:text-zinc-50 text-sm line-clamp-2">{book.title}</h3>
+                        )}
+                        
+                        {editingId === book.id ? (
+                          <input 
+                            value={editFormData.authors || ''} 
+                            onChange={e => setEditFormData({...editFormData, authors: e.target.value})} 
+                            className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-xs border-none focus:ring-1 focus:ring-purple-500"
+                          />
+                        ) : (
+                          <p className="text-purple-600 text-[11px] font-bold truncate">{book.authors}</p>
+                        )}
+                        
+                        <p className="text-zinc-400 text-[10px]">{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-1 mt-2">
+                        {editingId === book.id ? (
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); saveEdit(); }} className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"><Check className="w-4 h-4"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl"><X className="w-4 h-4"/></button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }} className="p-2 text-zinc-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors"><Edit2 className="w-4 h-4"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); deleteSavedBook(book.id!); }} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><Trash2 className="w-4 h-4"/></button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-4 pb-4 mt-auto">
+                    {editingId === book.id ? (
+                      <textarea
+                        value={editFormData.personal_memo || ''}
+                        onChange={e => setEditFormData({...editFormData, personal_memo: e.target.value})}
+                        placeholder="개인 메모를 입력하세요..."
+                        className="w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none"
+                      />
+                    ) : (
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px]">
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
+                          {book.personal_memo || '남겨진 메모가 없습니다.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {savedBooks.length === 0 && (
+              <div className="py-20 text-center space-y-4">
+                <div className="w-20 h-20 bg-zinc-50 dark:bg-zinc-900 rounded-full flex items-center justify-center mx-auto">
+                  <BookOpen className="w-10 h-10 text-zinc-200" />
+                </div>
+                <p className="text-zinc-400 text-sm">아직 저장된 책이 없습니다.<br/>검색 탭에서 책을 추가해보세요.</p>
+              </div>
+            )}
           </section>
         )}
       </main>
@@ -491,6 +504,79 @@ export default function Home() {
           </button>
         </div>
       </nav>
+
+      {/* 도서 상세 모달 */}
+      {selectedBook && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all" onClick={() => setSelectedBook(null)}>
+          <div className="bg-white dark:bg-zinc-900 w-full max-w-lg max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="relative h-48 sm:h-64 overflow-hidden bg-purple-50 dark:bg-purple-900/10">
+              <img 
+                src={selectedBook.thumbnail || '/file.svg'} 
+                className="w-full h-full object-contain p-8 scale-110 blur-xl opacity-20 absolute inset-0" 
+              />
+              <img 
+                src={selectedBook.thumbnail || '/file.svg'} 
+                className="w-full h-full object-contain p-4 relative z-10 drop-shadow-xl" 
+              />
+              <button 
+                onClick={() => setSelectedBook(null)}
+                className="absolute top-6 right-6 p-2 bg-white/20 dark:bg-black/20 backdrop-blur-md rounded-full text-white hover:bg-white/40 transition-all z-20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-8 overflow-y-auto no-scrollbar flex-1 space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-50 leading-tight">
+                  {selectedBook.title}
+                </h2>
+                <div className="flex flex-wrap justify-center gap-2 text-sm">
+                  <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold">
+                    {Array.isArray(selectedBook.authors) ? selectedBook.authors.join(', ') : selectedBook.authors}
+                  </span>
+                  <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-full">
+                    {selectedBook.publisher}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-50 font-bold border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                  <BookOpen className="w-4 h-4 text-purple-500" />
+                  <span>책 소개</span>
+                </div>
+                <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed text-justify">
+                  {selectedBook.contents || '등록된 정보가 없습니다.'}
+                </p>
+              </div>
+
+              {('personal_memo' in selectedBook) && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-50 font-bold border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                    <Edit2 className="w-4 h-4 text-purple-500" />
+                    <span>나의 메모</span>
+                  </div>
+                  <div className="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-3xl border border-zinc-100 dark:border-zinc-800">
+                    <p className="text-zinc-700 dark:text-zinc-300 text-sm italic leading-relaxed whitespace-pre-wrap">
+                      {selectedBook.personal_memo || '남겨진 메모가 없습니다.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800">
+              <button 
+                onClick={() => setSelectedBook(null)}
+                className="w-full py-4 bg-zinc-900 dark:bg-white dark:text-black text-white rounded-2xl font-bold text-lg hover:scale-[0.98] transition-all"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

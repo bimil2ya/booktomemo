@@ -1,4 +1,9 @@
-<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
-  <rect width="180" height="180" rx="40" fill="#9333ea"/>
-  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-size="100">📖</text>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="120" fill="#9333EA"/>
+  <path d="M140 120H320C342.091 120 360 137.909 360 160V380C360 402.091 342.091 420 320 420H140C117.909 420 100 402.091 100 380V160C100 137.909 117.909 120 140 120Z" fill="white" fill-opacity="0.2"/>
+  <path d="M160 140H340C362.091 140 380 157.909 380 180V400C380 422.091 362.091 440 340 440H160C137.909 440 120 422.091 120 400V180C120 157.909 137.909 140 160 140Z" fill="white"/>
+  <rect x="160" y="200" width="140" height="20" rx="10" fill="#E9D5FF"/>
+  <rect x="160" y="240" width="160" height="20" rx="10" fill="#E9D5FF"/>
+  <rect x="160" y="280" width="100" height="20" rx="10" fill="#E9D5FF"/>
+  <path d="M414.28 174.28L367.72 220.84C362.1 226.46 355 229.5 347.5 229.5H330.5V212.5C330.5 205 333.54 197.9 339.16 192.28L385.72 145.72C393.53 137.91 406.47 137.91 414.28 145.72C422.09 153.53 422.09 166.47 414.28 174.28Z" fill="#9333EA"/>
 </svg>
