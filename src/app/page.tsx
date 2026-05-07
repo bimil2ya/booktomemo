@@ -54,7 +54,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.5.5";
+  const VERSION = "v1.5.6";
 
   // 상세 모달 상태
   const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
