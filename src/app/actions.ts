@@ -3,7 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://jmfgxmpgedcxyvaclci.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_ifts273gFtkSiY1SZBxNWg_lnSIKD-m';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptZmd4bXBncGVkY3h5dmFjbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTMxOTIsImV4cCI6MjA5MzY2OTE5Mn0.DYfK9_Ei844hRGub0xKwGQr9XjmKswYqpQDc6zKMwBg';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
