@@ -21,26 +21,26 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.0.3";
+  const VERSION = "v1.0.4";
 
   // 페이지 로드 시 URL에 검색어가 있으면 바로 검색 실행
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
-    if (q) {
+    if (q && q !== '[' && q !== '') {
       setQuery(q);
       searchBooks(q, false); // URL 업데이트는 하지 않음
     }
   }, []);
 
   const searchBooks = async (searchQuery: string, updateUrl = true) => {
-    if (!searchQuery) return;
+    if (!searchQuery || searchQuery === '[') return;
     setLoading(true);
     
     // URL에 검색어 반영 (돌아왔을 때 결과 유지를 위함)
     if (updateUrl) {
       const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?q=' + encodeURIComponent(searchQuery);
-      window.history.pushState({ path: newUrl }, '', newUrl);
+      window.history.replaceState({ path: newUrl }, '', newUrl);
     }
 
     try {
@@ -105,7 +105,7 @@ export default function Home() {
 
   const sendToShortcut = async (book: Book) => {
     const savedBooks = JSON.parse(localStorage.getItem('saved_books') || '[]');
-    const isDuplicate = savedBooks.some((b: Book) => b.isbn === book.isbn);
+    const isDuplicate = savedBooks.some((b: { isbn: string }) => b.isbn === book.isbn);
 
     if (isDuplicate) {
       if (!confirm('이미 메모로 보낸 책입니다. 다시 보낼까요?')) {
