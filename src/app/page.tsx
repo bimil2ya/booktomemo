@@ -16,14 +16,15 @@ interface Book {
 export default function Home() {
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
+  const [savedBooks, setSavedBooks] = useState<{ isbn: string; title: string; authors?: string; thumbnail?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.0.4";
+  const VERSION = "v1.0.5";
 
-  // 페이지 로드 시 URL에 검색어가 있으면 바로 검색 실행
+  // 페이지 로드 시 URL에 검색어가 있으면 바로 검색 실행 및 저장된 책 불러오기
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
@@ -31,6 +32,9 @@ export default function Home() {
       setQuery(q);
       searchBooks(q, false); // URL 업데이트는 하지 않음
     }
+
+    const saved = JSON.parse(localStorage.getItem('saved_books') || '[]');
+    setSavedBooks(saved);
   }, []);
 
   const searchBooks = async (searchQuery: string, updateUrl = true) => {
@@ -104,8 +108,8 @@ export default function Home() {
   };
 
   const sendToShortcut = async (book: Book) => {
-    const savedBooks = JSON.parse(localStorage.getItem('saved_books') || '[]');
-    const isDuplicate = savedBooks.some((b: { isbn: string }) => b.isbn === book.isbn);
+    const currentSaved = JSON.parse(localStorage.getItem('saved_books') || '[]');
+    const isDuplicate = currentSaved.some((b: { isbn: string }) => b.isbn === book.isbn);
 
     if (isDuplicate) {
       if (!confirm('이미 메모로 보낸 책입니다. 다시 보낼까요?')) {
@@ -128,21 +132,30 @@ export default function Home() {
     const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + 
                 "&input=text&text=" + encodeURIComponent(textInput);
 
-    if (!isDuplicate) {
-      localStorage.setItem('saved_books', JSON.stringify([...savedBooks, { isbn: book.isbn, title: book.title }]));
-    }
+    const updatedSaved = [
+      { 
+        isbn: book.isbn, 
+        title: book.title,
+        authors: book.authors.join(', '),
+        thumbnail: book.thumbnail
+      },
+      ...currentSaved.filter((b: { isbn: string }) => b.isbn !== book.isbn)
+    ].slice(0, 10); // 최근 10개만 저장
+    
+    localStorage.setItem('saved_books', JSON.stringify(updatedSaved));
+    setSavedBooks(updatedSaved);
 
     // 단축어 직접 실행
     window.location.href = url;
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-4 pb-20 sm:p-8 font-sans">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-4 pb-32 sm:p-8 font-sans">
       <div className="absolute top-4 left-4 text-[10px] font-mono text-zinc-300 dark:text-zinc-700 select-none">
         {VERSION}
       </div>
 
-      <main className="max-w-2xl mx-auto space-y-8">
+      <main className="max-w-2xl mx-auto space-y-12">
         <header className="text-center space-y-2">
           <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
             BookToMemo
@@ -251,6 +264,46 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {savedBooks.length > 0 && !loading && (
+          <section className="space-y-6 pt-8 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                최근 보낸 메모
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {savedBooks.map((book) => (
+                <div 
+                  key={book.isbn}
+                  className="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800 shadow-sm space-y-3"
+                >
+                  <div className="aspect-[3/4] relative overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                    {book.thumbnail ? (
+                      <img
+                        src={book.thumbnail}
+                        alt={book.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-zinc-400 text-[10px] text-center p-2">
+                        표지 없음
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-50 truncate">
+                      {book.title}
+                    </h4>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                      {book.authors}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
       
       <footer className="fixed bottom-6 left-1/2 -translate-x-1/2">
@@ -258,6 +311,7 @@ export default function Home() {
           onClick={() => {
             if(confirm('모든 저장 기록을 삭제하시겠습니까? (메모는 삭제되지 않습니다)')) {
               localStorage.removeItem('saved_books');
+              setSavedBooks([]);
               alert('기록이 초기화되었습니다.');
             }
           }}
