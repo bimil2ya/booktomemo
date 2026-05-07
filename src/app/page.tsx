@@ -19,19 +19,21 @@ export default function Home() {
   const [savedBooks, setSavedBooks] = useState<{ isbn: string; title: string; authors?: string; thumbnail?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.0.7";
+  const VERSION = "v1.0.8";
 
-  // 페이지 로드 시 URL에 검색어가 있으면 바로 검색 실행 및 저장된 책 불러오기
+  // 초기 클라이언트 마운트 확인 및 데이터 로드
   useEffect(() => {
+    setIsMounted(true);
+    
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
     const lastQuery = localStorage.getItem('last_search_query');
 
     if (q) {
-      // 단축어에서 [제목] 형식으로 복귀하는 경우 원래 검색어(lastQuery)를 우선 사용
       if (q.startsWith('[') && lastQuery) {
         setQuery(lastQuery);
         searchBooks(lastQuery, false);
@@ -39,10 +41,6 @@ export default function Home() {
         setQuery(q);
         searchBooks(q, false);
       }
-    } else if (lastQuery) {
-      // URL에 검색어가 없어도 마지막 검색어가 있다면 복구 (선택 사항)
-      // setQuery(lastQuery);
-      // searchBooks(lastQuery, false);
     }
 
     const saved = JSON.parse(localStorage.getItem('saved_books') || '[]');
@@ -51,15 +49,12 @@ export default function Home() {
 
   const searchBooks = async (searchQuery: string, updateUrl = true) => {
     if (!searchQuery) return;
-    
-    // '[' 만 있는 경우는 단축어 복귀 시의 비정상 케이스이므로 무시
     if (searchQuery.trim() === '[') return;
 
     setLoading(true);
     
-    // URL에 검색어 반영 (돌아왔을 때 결과 유지를 위함)
-    if (updateUrl) {
-      localStorage.setItem('last_search_query', searchQuery); // 현재 검색어 저장
+    if (updateUrl && typeof window !== 'undefined') {
+      localStorage.setItem('last_search_query', searchQuery);
       const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?q=' + encodeURIComponent(searchQuery);
       window.history.replaceState({ path: newUrl }, '', newUrl);
     }
@@ -125,6 +120,8 @@ export default function Home() {
   };
 
   const sendToShortcut = async (book: Book) => {
+    if (typeof window === 'undefined') return;
+    
     const currentSaved = JSON.parse(localStorage.getItem('saved_books') || '[]');
     const isDuplicate = currentSaved.some((b: { isbn: string }) => b.isbn === book.isbn);
 
@@ -140,13 +137,12 @@ export default function Home() {
       thumbnail: book.thumbnail,
       contents: book.contents,
       publisher: book.publisher,
-      query: query // 현재 검색어 전달
+      query: query
     };
     
     const textInput = JSON.stringify(inputData);
     const shortcutName = 'BookToMemo';
     
-    // x-callback-url 대신 일반 실행 방식을 사용하여 단축어 앱의 강제 설정을 방지
     const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + 
                 "&input=text&text=" + encodeURIComponent(textInput);
 
@@ -158,14 +154,16 @@ export default function Home() {
         thumbnail: book.thumbnail
       },
       ...currentSaved.filter((b: { isbn: string }) => b.isbn !== book.isbn)
-    ].slice(0, 10); // 최근 10개만 저장
+    ].slice(0, 10);
     
     localStorage.setItem('saved_books', JSON.stringify(updatedSaved));
     setSavedBooks(updatedSaved);
 
-    // 단축어 직접 실행
     window.location.href = url;
   };
+
+  // 클라이언트 마운트 전에는 아무것도 렌더링하지 않거나 로딩 상태 표시 (Hydration Error 방지)
+  if (!isMounted) return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950" />;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-4 pb-32 sm:p-8 font-sans">
