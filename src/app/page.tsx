@@ -124,11 +124,8 @@ export default function Home() {
     const textInput = JSON.stringify(inputData);
     const shortcutName = 'BookToMemo';
     
-    // 현재 검색 결과가 포함된 URL을 복귀 주소로 사용
-    const callbackUrl = window.location.href;
-    
-    const url = "shortcuts://x-callback-url/run-shortcut?name=" + encodeURIComponent(shortcutName) + 
-                "&x-success=" + encodeURIComponent(callbackUrl) +
+    // x-callback-url 대신 일반 실행 방식을 사용하여 단축어 앱의 강제 설정을 방지
+    const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + 
                 "&input=text&text=" + encodeURIComponent(textInput);
 
     if (!isDuplicate) {
