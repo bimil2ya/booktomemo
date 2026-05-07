@@ -22,15 +22,27 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.0.6";
+  const VERSION = "v1.0.7";
 
   // 페이지 로드 시 URL에 검색어가 있으면 바로 검색 실행 및 저장된 책 불러오기
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
-    if (q && q !== '[' && q !== '') {
-      setQuery(q);
-      searchBooks(q, false); // URL 업데이트는 하지 않음
+    const lastQuery = localStorage.getItem('last_search_query');
+
+    if (q) {
+      // 단축어에서 [제목] 형식으로 복귀하는 경우 원래 검색어(lastQuery)를 우선 사용
+      if (q.startsWith('[') && lastQuery) {
+        setQuery(lastQuery);
+        searchBooks(lastQuery, false);
+      } else if (q !== '' && q !== '[') {
+        setQuery(q);
+        searchBooks(q, false);
+      }
+    } else if (lastQuery) {
+      // URL에 검색어가 없어도 마지막 검색어가 있다면 복구 (선택 사항)
+      // setQuery(lastQuery);
+      // searchBooks(lastQuery, false);
     }
 
     const saved = JSON.parse(localStorage.getItem('saved_books') || '[]');
@@ -47,6 +59,7 @@ export default function Home() {
     
     // URL에 검색어 반영 (돌아왔을 때 결과 유지를 위함)
     if (updateUrl) {
+      localStorage.setItem('last_search_query', searchQuery); // 현재 검색어 저장
       const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?q=' + encodeURIComponent(searchQuery);
       window.history.replaceState({ path: newUrl }, '', newUrl);
     }
@@ -127,7 +140,7 @@ export default function Home() {
       thumbnail: book.thumbnail,
       contents: book.contents,
       publisher: book.publisher,
-      query: query // 현재 검색어(또는 상태)를 함께 전달하여 단축어에서 복귀 시 활용할 수 있게 함
+      query: query // 현재 검색어 전달
     };
     
     const textInput = JSON.stringify(inputData);
@@ -316,6 +329,7 @@ export default function Home() {
           onClick={() => {
             if(confirm('모든 저장 기록을 삭제하시겠습니까? (메모는 삭제되지 않습니다)')) {
               localStorage.removeItem('saved_books');
+              localStorage.removeItem('last_search_query');
               setSavedBooks([]);
               alert('기록이 초기화되었습니다.');
             }
