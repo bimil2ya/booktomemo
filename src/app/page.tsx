@@ -100,9 +100,9 @@ export default function Home() {
   }, [sortColumn, sortOrder]);
 
   const handleEnterLibrary = () => {
-    if (!nameInput.trim()) return;
-    localStorage.setItem('library_owner_name', nameInput.trim());
-    setLibraryName(nameInput.trim());
+    const finalName = nameInput.trim() || '경호의서재';
+    localStorage.setItem('library_owner_name', finalName);
+    setLibraryName(finalName);
   };
 
   const handleLogout = () => {
