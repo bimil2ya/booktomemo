@@ -22,7 +22,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.0.5";
+  const VERSION = "v1.0.6";
 
   // 페이지 로드 시 URL에 검색어가 있으면 바로 검색 실행 및 저장된 책 불러오기
   useEffect(() => {
@@ -38,7 +38,11 @@ export default function Home() {
   }, []);
 
   const searchBooks = async (searchQuery: string, updateUrl = true) => {
-    if (!searchQuery || searchQuery === '[') return;
+    if (!searchQuery) return;
+    
+    // '[' 만 있는 경우는 단축어 복귀 시의 비정상 케이스이므로 무시
+    if (searchQuery.trim() === '[') return;
+
     setLoading(true);
     
     // URL에 검색어 반영 (돌아왔을 때 결과 유지를 위함)
@@ -122,7 +126,8 @@ export default function Home() {
       authors: book.authors.join(', '),
       thumbnail: book.thumbnail,
       contents: book.contents,
-      publisher: book.publisher
+      publisher: book.publisher,
+      query: query // 현재 검색어(또는 상태)를 함께 전달하여 단축어에서 복귀 시 활용할 수 있게 함
     };
     
     const textInput = JSON.stringify(inputData);
