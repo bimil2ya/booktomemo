@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Search, Trash2, AlertCircle } from 'lucide-react';
+import { Camera, Search, Trash2, AlertCircle, Save, X, Edit2, Check, Smartphone, Database } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
 interface Book {
@@ -13,17 +13,31 @@ interface Book {
   isbn: string;
 }
 
+interface SavedBook {
+  isbn: string;
+  title: string;
+  authors: string;
+  thumbnail: string;
+  contents: string;
+  publisher: string;
+  personalMemo?: string;
+}
+
 export default function Home() {
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
-  const [savedBooks, setSavedBooks] = useState<{ isbn: string; title: string; authors?: string; thumbnail?: string }[]>([]);
+  const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
   const [loading, setLoading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [saveMode, setSaveMode] = useState<'shortcut' | 'native'>('native');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<SavedBook>>({});
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.0.8";
+  const VERSION = "v1.1.0";
 
   // 초기 클라이언트 마운트 확인 및 데이터 로드
   useEffect(() => {
@@ -32,8 +46,12 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
     const lastQuery = localStorage.getItem('last_search_query');
+    const lastMode = localStorage.getItem('save_mode') as 'shortcut' | 'native';
+
+    if (lastMode) setSaveMode(lastMode);
 
     if (q) {
+      // 단축어에서 [제목] 형식으로 복귀하는 경우 원래 검색어(lastQuery)를 우선 사용
       if (q.startsWith('[') && lastQuery) {
         setQuery(lastQuery);
         searchBooks(lastQuery, false);
@@ -46,6 +64,12 @@ export default function Home() {
     const saved = JSON.parse(localStorage.getItem('saved_books') || '[]');
     setSavedBooks(saved);
   }, []);
+
+  const toggleSaveMode = () => {
+    const newMode = saveMode === 'shortcut' ? 'native' : 'shortcut';
+    setSaveMode(newMode);
+    localStorage.setItem('save_mode', newMode);
+  };
 
   const searchBooks = async (searchQuery: string, updateUrl = true) => {
     if (!searchQuery) return;
@@ -119,47 +143,77 @@ export default function Home() {
     }
   };
 
-  const sendToShortcut = async (book: Book) => {
+  const handleSave = async (book: Book) => {
     if (typeof window === 'undefined') return;
     
     const currentSaved = JSON.parse(localStorage.getItem('saved_books') || '[]');
-    const isDuplicate = currentSaved.some((b: { isbn: string }) => b.isbn === book.isbn);
+    const isDuplicate = currentSaved.some((b: SavedBook) => b.isbn === book.isbn);
 
     if (isDuplicate) {
-      if (!confirm('이미 메모로 보낸 책입니다. 다시 보낼까요?')) {
+      if (!confirm('이미 저장된 책입니다. 다시 저장할까요?')) {
         return;
       }
     }
 
-    const inputData = {
+    const newSavedBook: SavedBook = {
+      isbn: book.isbn,
       title: book.title,
       authors: book.authors.join(', '),
       thumbnail: book.thumbnail,
       contents: book.contents,
-      publisher: book.publisher,
-      query: query
+      publisher: book.publisher
     };
-    
-    const textInput = JSON.stringify(inputData);
-    const shortcutName = 'BookToMemo';
-    
-    const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + 
-                "&input=text&text=" + encodeURIComponent(textInput);
 
+    if (saveMode === 'shortcut') {
+      const inputData = { ...newSavedBook, query: query };
+      const textInput = JSON.stringify(inputData);
+      const shortcutName = 'BookToMemo';
+      const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(shortcutName) + 
+                  "&input=text&text=" + encodeURIComponent(textInput);
+      
+      // 단축어 실행
+      window.location.href = url;
+    }
+
+    // 로컬 상태 및 저장소 업데이트 (공통 또는 자체 저장 모드용)
     const updatedSaved = [
-      { 
-        isbn: book.isbn, 
-        title: book.title,
-        authors: book.authors.join(', '),
-        thumbnail: book.thumbnail
-      },
-      ...currentSaved.filter((b: { isbn: string }) => b.isbn !== book.isbn)
-    ].slice(0, 10);
+      newSavedBook,
+      ...currentSaved.filter((b: SavedBook) => b.isbn !== book.isbn)
+    ].slice(0, 50); // 보관함 최대 50개 저장
     
     localStorage.setItem('saved_books', JSON.stringify(updatedSaved));
     setSavedBooks(updatedSaved);
 
-    window.location.href = url;
+    if (saveMode === 'native') {
+      alert('서재에 저장되었습니다.');
+    }
+  };
+
+  const startEditing = (book: SavedBook) => {
+    setEditingId(book.isbn);
+    setEditFormData(book);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditFormData({});
+  };
+
+  const saveEdit = () => {
+    const updated = savedBooks.map(b => 
+      b.isbn === editingId ? { ...b, ...editFormData } as SavedBook : b
+    );
+    setSavedBooks(updated);
+    localStorage.setItem('saved_books', JSON.stringify(updated));
+    setEditingId(null);
+    setEditFormData({});
+  };
+
+  const deleteSavedBook = (isbn: string) => {
+    if (!confirm('보관함에서 삭제하시겠습니까?')) return;
+    const updated = savedBooks.filter(b => b.isbn !== isbn);
+    setSavedBooks(updated);
+    localStorage.setItem('saved_books', JSON.stringify(updated));
   };
 
   // 클라이언트 마운트 전에는 아무것도 렌더링하지 않거나 로딩 상태 표시 (Hydration Error 방지)
@@ -167,8 +221,17 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-4 pb-32 sm:p-8 font-sans">
-      <div className="absolute top-4 left-4 text-[10px] font-mono text-zinc-300 dark:text-zinc-700 select-none">
-        {VERSION}
+      <div className="max-w-2xl mx-auto flex justify-between items-center mb-4">
+        <div className="text-[10px] font-mono text-zinc-300 dark:text-zinc-700 select-none">
+          {VERSION}
+        </div>
+        <button 
+          onClick={toggleSaveMode}
+          className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
+        >
+          {saveMode === 'shortcut' ? <Smartphone className="w-3.5 h-3.5 text-blue-500" /> : <Database className="w-3.5 h-3.5 text-purple-500" />}
+          {saveMode === 'shortcut' ? '애플 단축어 모드' : '앱 자체 저장 모드'}
+        </button>
       </div>
 
       <main className="max-w-2xl mx-auto space-y-12">
@@ -177,7 +240,7 @@ export default function Home() {
             BookToMemo
           </h1>
           <p className="text-zinc-500 dark:text-zinc-400 font-medium">
-            스마트하게 검색하고 애플 메모로 전송
+            {saveMode === 'shortcut' ? '검색하고 애플 메모로 전송' : '검색하고 나만의 서재에 저장'}
           </p>
         </header>
 
@@ -206,7 +269,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={loading || !query}
-              className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg hover:bg-purple-700 active:scale-[0.98] transition-all shadow-lg shadow-purple-200 dark:shadow-none disabled:opacity-50 disabled:grayscale"
+              className={`w-full py-4 text-white rounded-2xl font-bold text-lg active:scale-[0.98] transition-all shadow-lg dark:shadow-none disabled:opacity-50 disabled:grayscale ${saveMode === 'shortcut' ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'}`}
             >
               {loading ? '검색 중...' : '검색 시작'}
             </button>
@@ -256,10 +319,10 @@ export default function Home() {
                   </p>
                 </div>
                 <button
-                  onClick={() => sendToShortcut(book)}
-                  className="mt-4 w-full py-2.5 bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 rounded-xl text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-zinc-200 dark:shadow-none"
+                  onClick={() => handleSave(book)}
+                  className={`mt-4 w-full py-2.5 text-white rounded-xl text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg dark:shadow-none ${saveMode === 'shortcut' ? 'bg-zinc-900 dark:bg-zinc-50 dark:text-zinc-900' : 'bg-purple-600'}`}
                 >
-                  애플 메모로 보내기
+                  {saveMode === 'shortcut' ? '애플 메모로 보내기' : '내 서재에 저장'}
                 </button>
               </div>
             </div>
@@ -283,38 +346,89 @@ export default function Home() {
 
         {savedBooks.length > 0 && !loading && (
           <section className="space-y-6 pt-8 border-t border-zinc-200 dark:border-zinc-800">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                최근 보낸 메모
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+              <Database className="w-6 h-6 text-purple-500" />
+              내 보관함
+            </h2>
+            <div className="grid gap-6">
               {savedBooks.map((book) => (
                 <div 
                   key={book.isbn}
-                  className="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800 shadow-sm space-y-3"
+                  className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm space-y-4"
                 >
-                  <div className="aspect-[3/4] relative overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                    {book.thumbnail ? (
-                      <img
-                        src={book.thumbnail}
-                        alt={book.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-400 text-[10px] text-center p-2">
-                        표지 없음
+                  {editingId === book.isbn ? (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-400">제목</label>
+                        <input 
+                          value={editFormData.title || ''} 
+                          onChange={e => setEditFormData({...editFormData, title: e.target.value})}
+                          className="w-full p-2 bg-zinc-50 dark:bg-zinc-800 rounded-lg text-sm border-none focus:ring-2 focus:ring-purple-500"
+                        />
                       </div>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-50 truncate">
-                      {book.title}
-                    </h4>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                      {book.authors}
-                    </p>
-                  </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-400">저자</label>
+                          <input 
+                            value={editFormData.authors || ''} 
+                            onChange={e => setEditFormData({...editFormData, authors: e.target.value})}
+                            className="w-full p-2 bg-zinc-50 dark:bg-zinc-800 rounded-lg text-sm border-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-400">출판사</label>
+                          <input 
+                            value={editFormData.publisher || ''} 
+                            onChange={e => setEditFormData({...editFormData, publisher: e.target.value})}
+                            className="w-full p-2 bg-zinc-50 dark:bg-zinc-800 rounded-lg text-sm border-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-400">책 소개</label>
+                        <textarea 
+                          value={editFormData.contents || ''} 
+                          onChange={e => setEditFormData({...editFormData, contents: e.target.value})}
+                          rows={3}
+                          className="w-full p-2 bg-zinc-50 dark:bg-zinc-800 rounded-lg text-sm border-none focus:ring-2 focus:ring-purple-500 resize-none"
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button onClick={saveEdit} className="flex-1 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+                          <Check className="w-4 h-4" /> 저장
+                        </button>
+                        <button onClick={cancelEditing} className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+                          <X className="w-4 h-4" /> 취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-4">
+                        <img src={book.thumbnail} className="w-16 h-24 object-cover rounded-lg flex-shrink-0" alt={book.title} />
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-50 truncate">{book.title}</h3>
+                          <p className="text-purple-600 text-sm font-medium">{book.authors}</p>
+                          <p className="text-zinc-400 text-xs">{book.publisher}</p>
+                        </div>
+                      </div>
+                      <p className="text-zinc-500 text-sm line-clamp-2">{book.contents}</p>
+                      <div className="flex gap-2 pt-2 border-t border-zinc-50 dark:border-zinc-800">
+                        <button 
+                          onClick={() => startEditing(book)}
+                          className="flex-1 py-2 text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors text-xs font-bold flex items-center justify-center gap-2"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" /> 정보 수정
+                        </button>
+                        <button 
+                          onClick={() => deleteSavedBook(book.isbn)}
+                          className="px-4 py-2 text-zinc-300 hover:text-red-500 transition-colors text-xs font-bold flex items-center justify-center gap-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> 삭제
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -325,17 +439,17 @@ export default function Home() {
       <footer className="fixed bottom-6 left-1/2 -translate-x-1/2">
         <button 
           onClick={() => {
-            if(confirm('모든 저장 기록을 삭제하시겠습니까? (메모는 삭제되지 않습니다)')) {
+            if(confirm('모든 보관함 기록을 삭제하시겠습니까?')) {
               localStorage.removeItem('saved_books');
               localStorage.removeItem('last_search_query');
               setSavedBooks([]);
-              alert('기록이 초기화되었습니다.');
+              alert('보관함이 비워졌습니다.');
             }
           }}
           className="flex items-center gap-2 px-4 py-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-full border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-400 hover:text-red-500 transition-colors"
         >
           <Trash2 className="w-3.5 h-3.5" />
-          기록 초기화
+          보관함 비우기
         </button>
       </footer>
     </div>
