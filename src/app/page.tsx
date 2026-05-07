@@ -57,7 +57,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.3.1";
+  const VERSION = "v1.3.2";
 
   // 초기 마운트 시 설정 불러오기
   useEffect(() => {
@@ -183,34 +183,39 @@ export default function Home() {
   const handleSave = async (book: Book) => {
     if (!libraryName) return;
     
-    // 중복 체크 (Supabase)
-    const { data: existing } = await supabase
-      .from('books')
-      .select('isbn')
-      .eq('owner_name', libraryName)
-      .eq('isbn', book.isbn)
-      .single();
+    setLoading(true); // 저장 중임을 표시
+    try {
+      // 1. 중복 체크 (더 안전한 방식으로 수정)
+      const { data: existing, error: checkError } = await supabase
+        .from('books')
+        .select('id')
+        .eq('owner_name', libraryName)
+        .eq('isbn', book.isbn);
 
-    if (existing) {
-      if (!confirm('이미 저장된 책입니다. 다시 저장할까요?')) return;
-    }
+      if (checkError) throw checkError;
 
-    const newBook: Omit<SavedBook, 'id' | 'created_at'> = {
-      isbn: book.isbn,
-      title: book.title,
-      authors: book.authors.join(', '),
-      thumbnail: book.thumbnail,
-      contents: book.contents,
-      publisher: book.publisher,
-      owner_name: libraryName
-    };
+      if (existing && existing.length > 0) {
+        if (!confirm('이미 저장된 책입니다. 다시 저장할까요?')) {
+          setLoading(false);
+          return;
+        }
+      }
 
-    const { error } = await supabase.from('books').insert([newBook]);
+      const newBook: Omit<SavedBook, 'id' | 'created_at'> = {
+        isbn: book.isbn,
+        title: book.title,
+        authors: book.authors.join(', '),
+        thumbnail: book.thumbnail || '',
+        contents: book.contents || '',
+        publisher: book.publisher || '',
+        owner_name: libraryName
+      };
 
-    if (error) {
-      console.error('Supabase Save Error:', error);
-      alert('저장 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
-    } else {
+      // 2. 데이터 삽입
+      const { error: insertError } = await supabase.from('books').insert([newBook]);
+
+      if (insertError) throw insertError;
+
       if (saveMode === 'shortcut') {
         const url = "shortcuts://run-shortcut?name=BookToMemo&input=text&text=" + 
                     encodeURIComponent(JSON.stringify({ ...newBook, query }));
@@ -218,7 +223,25 @@ export default function Home() {
       } else {
         alert('서재에 저장되었습니다.');
       }
-      fetchSavedBooks(); // 목록 갱신
+      fetchSavedBooks();
+    } catch (error: any) {
+      console.error('Supabase Operation Error:', error);
+      // 상세 에러 메시지 구성
+      const errorMsg = error.message || '네트워크 연결이 원활하지 않습니다.';
+      const hint = error.code ? `(Error Code: ${error.code})` : '(Network Error)';
+      alert(`저장 실패: ${errorMsg}\n${hint}\n\n도움말: 사파리의 '크로스 사이트 추적 방지' 설정을 끄거나, 네트워크 상태를 확인해 주세요.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testConnection = async () => {
+    try {
+      const { data, error } = await supabase.from('books').select('count', { count: 'exact', head: true }).limit(1);
+      if (error) throw error;
+      alert('서버 연결 성공! 데이터베이스와 정상적으로 통신하고 있습니다.');
+    } catch (error: any) {
+      alert(`서버 연결 실패: ${error.message}\n인터넷 연결이나 Supabase 설정을 확인해 주세요.`);
     }
   };
 
@@ -288,8 +311,13 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32 font-sans transition-colors">
       <div className="max-w-4xl mx-auto p-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-zinc-300 dark:text-zinc-700">{VERSION}</span>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={testConnection}
+            className="text-[10px] font-mono text-zinc-300 dark:text-zinc-700 hover:text-purple-500 transition-colors"
+          >
+            {VERSION} [연결 확인]
+          </button>
           <div className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-[10px] font-bold text-zinc-500">
             {libraryName}의 서재
           </div>
