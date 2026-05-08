@@ -437,10 +437,10 @@ export default function Home() {
                 >
                   {/* 스와이프 시 나타나는 배경 버튼들 */}
                   <div className={`absolute inset-0 flex justify-end transition-opacity duration-300 ${swipingId === book.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                    <div className="flex w-full h-full">
+                    <div className="flex flex-col w-1/2 h-full">
                       <button 
                         onClick={() => setSwipingId(null)}
-                        className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-sm"
+                        className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-sm border-b border-white/10"
                       >
                         취소
                       </button>
@@ -456,7 +456,7 @@ export default function Home() {
                   {/* 메인 카드 콘텐츠 */}
                   <div 
                     onClick={() => swipingId !== book.id && editingId !== book.id && setSelectedBook(book)} 
-                    className={`bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300 cursor-pointer ${swipingId === book.id ? '-translate-x-full' : 'translate-x-0'}`}
+                    className={`bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300 cursor-pointer ${swipingId === book.id ? '-translate-x-1/2' : 'translate-x-0'}`}
                   >
                     <div className="p-4 flex gap-4">
                       <img src={book.thumbnail || '/file.svg'} className="w-20 h-28 object-cover rounded-xl shadow-xs" alt={book.title} />
