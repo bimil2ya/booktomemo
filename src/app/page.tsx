@@ -470,7 +470,10 @@ export default function Home() {
                         className="w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none"
                       />
                     ) : (
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px]">
+                      <div 
+                        onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
+                        className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
+                      >
                         <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
                           {book.personal_memo || '남겨진 메모가 없습니다.'}
                         </p>
