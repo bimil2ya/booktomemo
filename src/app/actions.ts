@@ -60,9 +60,18 @@ export async function saveBookAction(book: { isbn: string; title: string; author
 export async function updateBookAction(id: number, editData: any) {
   try {
     const supabase = getSupabase();
-    // id, created_at 등 시스템 컬럼이 업데이트에 포함되지 않도록 허용된 필드만 추출
-    const { title, authors, publisher, personal_memo } = editData;
-    const cleanData = { title, authors, publisher, personal_memo };
+    
+    // 허용된 필드만 명시적으로 추출하고, 값이 있는 것만 업데이트 객체에 포함
+    const allowedFields = ['title', 'authors', 'publisher', 'personal_memo'];
+    const cleanData: any = {};
+    
+    allowedFields.forEach(field => {
+      if (editData[field] !== undefined) {
+        cleanData[field] = editData[field];
+      }
+    });
+
+    console.log(`[Update] ID: ${id}, Data:`, cleanData);
 
     const { error } = await supabase.from('books').update(cleanData).eq('id', id);
     if (error) throw error;
