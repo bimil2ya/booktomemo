@@ -369,21 +369,21 @@ export default function Home() {
             </form>
             <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" />
 
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               {books.map((book, idx) => (
-                <div key={idx} onClick={() => setSelectedBook(book)} className="flex gap-5 p-5 bg-white dark:bg-zinc-900 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-sm cursor-pointer hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
-                  <img src={book.thumbnail || '/file.svg'} className="w-24 h-32 object-cover rounded-2xl shadow-sm flex-none" alt={book.title} />
-                  <div className="flex-1 flex flex-col justify-between min-w-0 py-1">
-                    <div className="space-y-1">
-                      <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-50 truncate leading-tight">{book.title}</h3>
-                      <p className="text-purple-600 text-xs font-bold truncate">{book.authors.join(', ')}</p>
-                      <p className="text-zinc-400 text-[10px]">{book.publisher}</p>
-                      <p className="mt-1 text-zinc-500 text-[11px] line-clamp-1 leading-relaxed">{book.contents}</p>
+                <div key={idx} onClick={() => setSelectedBook(book)} className="flex gap-4 p-3 bg-white dark:bg-zinc-900 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 shadow-sm cursor-pointer hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
+                  <img src={book.thumbnail || '/file.svg'} className="w-16 h-24 object-cover rounded-xl shadow-xs flex-none" alt={book.title} />
+                  <div className="flex-1 flex flex-col justify-center min-w-0">
+                    <div className="space-y-0.5">
+                      <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-50 truncate leading-tight">{book.title}</h3>
+                      <p className="text-purple-600 text-[11px] font-bold truncate">{book.authors.join(', ')}</p>
+                      <p className="text-zinc-400 text-[9px]">{book.publisher}</p>
+                      <p className="text-zinc-500 text-[11px] line-clamp-1 leading-relaxed">{book.contents}</p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleSave(book); }} 
                       disabled={savingIsbn === book.isbn}
-                      className={`mt-4 w-full py-3 text-white rounded-2xl text-xs font-bold transition-all ${savingIsbn === book.isbn ? 'bg-zinc-400 animate-pulse' : (saveMode === 'shortcut' ? 'bg-zinc-900' : 'bg-purple-600')}`}
+                      className={`mt-2 w-full py-1.5 text-white rounded-lg text-[11px] font-bold transition-all ${savingIsbn === book.isbn ? 'bg-zinc-400 animate-pulse' : (saveMode === 'shortcut' ? 'bg-zinc-900' : 'bg-purple-600')}`}
                     >
                       {savingIsbn === book.isbn ? '저장 중...' : (saveMode === 'shortcut' ? '애플 메모로 보내기' : '서재에 저장')}
                     </button>
