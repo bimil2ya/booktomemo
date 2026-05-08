@@ -663,7 +663,7 @@ export default function Home() {
                           />
                         </th>
                         <th onClick={() => toggleSort('title')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
-                        <th onClick={() => toggleSort('authors')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">저자</th>
+                        <th onClick={() => toggleSort('authors')} className="px-4 py-3 w-24 cursor-pointer hover:text-purple-600 transition-colors">저자</th>
                         <th className="px-4 py-3 w-10"></th>
                       </tr>
                     </thead>
@@ -679,7 +679,9 @@ export default function Home() {
                             />
                           </td>
                           <td onClick={() => setSelectedBook(book)} className="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-zinc-50 cursor-pointer">{book.title}</td>
-                          <td className="px-4 py-3 text-xs text-purple-600 font-semibold">{book.authors}</td>
+                          <td className="px-4 py-3 text-xs text-purple-600 font-semibold whitespace-nowrap">
+                            {book.authors.length > 6 ? `${book.authors.slice(0, 6)}...` : book.authors}
+                          </td>
                           <td className="px-4 py-3">
                             <button onClick={() => deleteSavedBook(book.id!)} className="p-1.5 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
                               <Trash2 className="w-4 h-4" />
