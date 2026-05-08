@@ -386,7 +386,7 @@ export default function Home() {
         {activeTab === 'search' ? (
           <div className="space-y-8 max-w-lg mx-auto">
             <header className="text-center space-y-2 pt-4">
-              <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">BookToMemo</h1>
+              <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">읽고픈 책들</h1>
               <p className="text-zinc-500 dark:text-zinc-400 text-sm">
                 {saveMode === 'shortcut' ? '검색하고 애플 메모로 전송' : '검색하고 클라우드 서재에 저장'}
               </p>
@@ -485,9 +485,6 @@ export default function Home() {
               </button>
               <button onClick={() => toggleSort('authors')} className={`flex-none px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1 ${sortColumn === 'authors' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500'}`}>
                 저자 {sortColumn === 'authors' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}
-              </button>
-              <button onClick={() => toggleSort('publisher')} className={`flex-none px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1 ${sortColumn === 'publisher' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500'}`}>
-                출판사 {sortColumn === 'publisher' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}
               </button>
             </div>
 
@@ -623,7 +620,6 @@ export default function Home() {
                         </th>
                         <th onClick={() => toggleSort('title')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
                         <th onClick={() => toggleSort('authors')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">저자</th>
-                        <th onClick={() => toggleSort('publisher')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">출판사</th>
                         <th className="px-4 py-3 w-10"></th>
                       </tr>
                     </thead>
@@ -640,7 +636,6 @@ export default function Home() {
                           </td>
                           <td onClick={() => setSelectedBook(book)} className="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-zinc-50 cursor-pointer">{book.title}</td>
                           <td className="px-4 py-3 text-xs text-purple-600 font-semibold">{book.authors}</td>
-                          <td className="px-4 py-3 text-xs text-zinc-400">{book.publisher}</td>
                           <td className="px-4 py-3">
                             <button onClick={() => deleteSavedBook(book.id!)} className="p-1.5 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
                               <Trash2 className="w-4 h-4" />
@@ -678,6 +673,7 @@ export default function Home() {
         </div>
       </nav>
 
+      {/* 도서 상세 모달 */}
       {selectedBook && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all" onClick={() => setSelectedBook(null)}>
           <div className="bg-white dark:bg-zinc-900 w-full max-w-lg max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
