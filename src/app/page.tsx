@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X, List, LayoutGrid } from 'lucide-react';
+import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X, List, LayoutGrid, Clock } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import axios from 'axios';
 import { getBooksAction, saveBookAction, updateBookAction, deleteBookAction, deleteBooksAction } from './actions';
@@ -35,6 +35,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'search' | 'library'>('search');
   const [libraryName, setLibraryName] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState('');
+  const [libraryHistory, setLibraryHistory] = useState<string[]>([]);
   
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
@@ -59,7 +60,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.5.6";
+  const VERSION = "v1.5.7";
 
   // 상세 모달 상태
   const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
@@ -69,6 +70,9 @@ export default function Home() {
     setIsMounted(true);
     const savedName = localStorage.getItem('library_owner_name');
     if (savedName) setLibraryName(savedName);
+
+    const history = localStorage.getItem('library_history');
+    if (history) setLibraryHistory(JSON.parse(history));
 
     const lastMode = localStorage.getItem('save_mode') as 'shortcut' | 'native';
     if (lastMode) setSaveMode(lastMode);
@@ -109,19 +113,32 @@ export default function Home() {
     if (libraryName) fetchSavedBooks();
   }, [sortColumn, sortOrder, libraryName, fetchSavedBooks]);
 
-  const handleEnterLibrary = () => {
-    const finalName = nameInput.trim() || '경호의서재';
+  const handleEnterLibrary = (selectedName?: string) => {
+    const finalName = selectedName || nameInput.trim() || '경호';
     localStorage.setItem('library_owner_name', finalName);
+    
+    // 히스토리 업데이트
+    const newHistory = [finalName, ...libraryHistory.filter(h => h !== finalName)].slice(0, 5);
+    localStorage.setItem('library_history', JSON.stringify(newHistory));
+    setLibraryHistory(newHistory);
+    
     setLibraryName(finalName);
   };
 
   const handleLogout = () => {
-    if (confirm('서재에서 나가시겠습니까? (이름은 기기에서 삭제됩니다)')) {
+    if (confirm('서재에서 나가시겠습니까?')) {
       localStorage.removeItem('library_owner_name');
       setLibraryName(null);
       setNameInput('');
       setSavedBooks([]);
     }
+  };
+
+  const removeFromHistory = (e: React.MouseEvent, name: string) => {
+    e.stopPropagation();
+    const newHistory = libraryHistory.filter(h => h !== name);
+    localStorage.setItem('library_history', JSON.stringify(newHistory));
+    setLibraryHistory(newHistory);
   };
 
   const toggleSort = (column: SortColumn) => {
@@ -326,21 +343,48 @@ export default function Home() {
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">나만의 서재 만들기</h1>
             <p className="text-zinc-500 text-sm">사용하실 서재 이름을 입력해주세요.<br/>동일한 이름으로 모든 기기에서 접속 가능합니다.</p>
           </div>
-          <div className="space-y-4">
-            <input
-              type="text"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="예: 경호의서재"
-              className="w-full px-4 py-3 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-lg focus:ring-2 focus:ring-purple-500"
-              onKeyDown={(e) => e.key === 'Enter' && handleEnterLibrary()}
-            />
-            <button
-              onClick={handleEnterLibrary}
-              className="w-full py-4 bg-purple-600 text-white rounded-xl font-bold text-lg hover:bg-purple-700 transition-all"
-            >
-              서재 들어가기
-            </button>
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="예: 경호"
+                className="w-full px-4 py-3 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-lg focus:ring-2 focus:ring-purple-500"
+                onKeyDown={(e) => e.key === 'Enter' && handleEnterLibrary()}
+              />
+              <button
+                onClick={() => handleEnterLibrary()}
+                className="w-full py-4 bg-purple-600 text-white rounded-xl font-bold text-lg hover:bg-purple-700 transition-all"
+              >
+                서재 들어가기
+              </button>
+            </div>
+
+            {libraryHistory.length > 0 && (
+              <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-[11px] font-bold text-zinc-400 flex items-center gap-1.5 px-1">
+                  <Clock className="w-3 h-3" /> 최근 접속한 서재
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {libraryHistory.map((name) => (
+                    <div 
+                      key={name}
+                      onClick={() => handleEnterLibrary(name)}
+                      className="group flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:border-purple-300 dark:hover:border-purple-900/50 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
+                    >
+                      <span className="text-sm font-bold text-zinc-600 dark:text-zinc-300">{name}의 서재</span>
+                      <button 
+                        onClick={(e) => removeFromHistory(e, name)}
+                        className="p-0.5 text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
