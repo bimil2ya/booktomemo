@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X, List, LayoutGrid, Clock } from 'lucide-react';
+import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X, List, LayoutGrid, Clock, MapPin, Building2, Loader2 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import axios from 'axios';
-import { getBooksAction, saveBookAction, updateBookAction, deleteBookAction, deleteBooksAction } from './actions';
+import { getBooksAction, saveBookAction, updateBookAction, deleteBookAction, deleteBooksAction, searchLibrariesAction, checkBookAvailabilityAction, searchLibrariesByBookAction } from './actions';
 
 interface Book {
   title: string;
@@ -28,8 +28,41 @@ interface SavedBook {
   owner_name: string;
 }
 
+interface LibraryInfo {
+  libCode: string;
+  libName: string;
+  address: string;
+}
+
+interface LibApiResponse {
+  lib: LibraryInfo;
+}
+
 type SortColumn = 'created_at' | 'title' | 'authors' | 'publisher';
 type SortOrder = 'asc' | 'desc';
+
+// 광역시도 데이터
+const REGIONS = [
+  { code: '11', name: '서울' }, { code: '21', name: '부산' }, { code: '22', name: '대구' },
+  { code: '23', name: '인천' }, { code: '24', name: '광주' }, { code: '25', name: '대전' },
+  { code: '26', name: '울산' }, { code: '29', name: '세종' }, { code: '31', name: '경기' },
+  { code: '32', name: '강원' }, { code: '33', name: '충북' }, { code: '34', name: '충남' },
+  { code: '35', name: '전북' }, { code: '36', name: '전남' }, { code: '37', name: '경북' },
+  { code: '38', name: '경남' }, { code: '39', name: '제주' }
+];
+
+// 주요 시군구 데이터 (경기 남양주 등 예시 포함)
+const SUB_REGIONS: Record<string, { code: string; name: string }[]> = {
+  '31': [
+    { code: '31130', name: '남양주시' }, { code: '31010', name: '수원시' }, { code: '31100', name: '고양시' },
+    { code: '31120', name: '구리시' }, { code: '31180', name: '하남시' }, { code: '31190', name: '용인시' },
+    { code: '31240', name: '화성시' }, { code: '31020', name: '성남시' }, { code: '31030', name: '의정부시' }
+  ],
+  '11': [
+    { code: '11230', name: '강남구' }, { code: '11240', name: '송파구' }, { code: '11250', name: '강동구' },
+    { code: '11140', name: '마포구' }, { code: '11110', name: '노원구' }, { code: '11010', name: '종로구' }
+  ]
+};
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'search' | 'library'>('search');
@@ -37,6 +70,13 @@ export default function Home() {
   const [nameInput, setNameInput] = useState('');
   const [libraryHistory, setLibraryHistory] = useState<string[]>([]);
   
+  // 도서관 설정 상태
+  const [selectedRegion, setSelectedRegion] = useState('31'); // 경기 기본
+  const [selectedSubRegion, setSelectedSubRegion] = useState('31130'); // 남양주 기본
+  const [availableLibs, setAvailableLibs] = useState<LibraryInfo[]>([]);
+  const [searchLibLoading, setSearchLibLoading] = useState(false);
+  const [myPrimaryLib, setMyPrimaryLib] = useState<{code: string, name: string} | null>(null);
+
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
   const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
@@ -60,9 +100,15 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.5.8";
+  const VERSION = "v1.6.0";
 
-  // 이름 정규화 함수 (예: "경호의 서재" -> "경호")
+  // 상세 모달 도서관 정보 상태
+  const [availabilityStatus, setAvailabilityStatus] = useState<{
+    status: 'loading' | 'available' | 'loaned' | 'not_found' | 'error';
+    otherLibs?: string[];
+  } | null>(null);
+
+  // 이름 정규화 함수
   const normalizeName = (name: string) => {
     return name.replace(/\s*의\s*서재\s*$/, '').replace(/\s*의서재\s*$/, '').trim();
   };
@@ -79,10 +125,12 @@ export default function Home() {
     const history = localStorage.getItem('library_history');
     if (history) {
       const parsedHistory: string[] = JSON.parse(history);
-      // 기존 히스토리 데이터 정규화
       const normalizedHistory = Array.from(new Set(parsedHistory.map(normalizeName)));
       setLibraryHistory(normalizedHistory);
     }
+
+    const savedLib = localStorage.getItem('my_primary_lib');
+    if (savedLib) setMyPrimaryLib(JSON.parse(savedLib));
 
     const lastMode = localStorage.getItem('save_mode') as 'shortcut' | 'native';
     if (lastMode) setSaveMode(lastMode);
@@ -99,6 +147,77 @@ export default function Home() {
   useEffect(() => {
     setSelectedIds([]);
   }, [activeTab]);
+
+  // 도서관 목록 검색 (설정 시)
+  const fetchLibraries = useCallback(async () => {
+    setSearchLibLoading(true);
+    const { data, error } = await searchLibrariesAction(selectedRegion, selectedSubRegion);
+    if (!error && data) {
+      setAvailableLibs(data.map((item: LibApiResponse) => ({
+        libCode: item.lib.libCode,
+        libName: item.lib.libName,
+        address: item.lib.address
+      })));
+    }
+    setSearchLibLoading(false);
+  }, [selectedRegion, selectedSubRegion]);
+
+  useEffect(() => {
+    if (!libraryName) {
+      fetchLibraries();
+    }
+  }, [libraryName, fetchLibraries]);
+
+  // 도서관 소장 여부 확인 로직
+  const checkAvailability = useCallback(async (book: SavedBook | Book) => {
+    if (!myPrimaryLib) return;
+    
+    // ISBN13 추출 (카카오 API 응답에서 13자리 숫자 찾기)
+    const isbn13 = book.isbn.split(' ').find(s => s.length === 13);
+    if (!isbn13) {
+      setAvailabilityStatus({ status: 'error' });
+      return;
+    }
+
+    setAvailabilityStatus({ status: 'loading' });
+    
+    try {
+      // 1. 주 도서관 확인
+      const { data: avail, error: availError } = await checkBookAvailabilityAction(isbn13, myPrimaryLib.code);
+      
+      if (availError) throw new Error(availError);
+
+      if (avail.hasBook === 'Y') {
+        setAvailabilityStatus({ 
+          status: avail.loanAvailable === 'Y' ? 'available' : 'loaned' 
+        });
+      } else {
+        // 2. 상호대차 (해당 시군구 전체) 확인
+        const { data: others, error: othersError } = await searchLibrariesByBookAction(isbn13, selectedRegion, selectedSubRegion);
+        if (othersError) throw othersError;
+
+        if (others && others.length > 0) {
+          setAvailabilityStatus({ 
+            status: 'not_found', 
+            otherLibs: others.map((l: LibApiResponse) => l.lib.libName) 
+          });
+        } else {
+          setAvailabilityStatus({ status: 'not_found', otherLibs: [] });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setAvailabilityStatus({ status: 'error' });
+    }
+  }, [myPrimaryLib, selectedRegion, selectedSubRegion]);
+
+  useEffect(() => {
+    if (selectedBook) {
+      checkAvailability(selectedBook);
+    } else {
+      setAvailabilityStatus(null);
+    }
+  }, [selectedBook, checkAvailability]);
 
   // 도서 목록 가져오기 (Supabase)
   const fetchSavedBooks = useCallback(async () => {
@@ -128,8 +247,17 @@ export default function Home() {
     const finalName = normalizeName(rawName);
     
     if (!finalName) return;
+    if (!myPrimaryLib && !selectedName) {
+      alert('도서관을 먼저 선택해주세요.');
+      return;
+    }
 
     localStorage.setItem('library_owner_name', finalName);
+    if (myPrimaryLib) {
+      localStorage.setItem('my_primary_lib', JSON.stringify(myPrimaryLib));
+      localStorage.setItem('my_region', selectedRegion);
+      localStorage.setItem('my_sub_region', selectedSubRegion);
+    }
     
     // 히스토리 업데이트
     const newHistory = [finalName, ...libraryHistory.filter(h => h !== finalName)].slice(0, 5);
@@ -346,31 +474,81 @@ export default function Home() {
 
   if (!isMounted) return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950" />;
 
-  // 1. 이름 입력 화면 (로그인 전)
+  // 1. 이름 및 도서관 설정 화면 (로그인 전)
   if (!libraryName) {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-xl space-y-6">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-xl space-y-6 overflow-hidden">
           <div className="text-center space-y-2">
             <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center mx-auto">
               <Library className="w-8 h-8 text-purple-600" />
             </div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">나만의 서재 만들기</h1>
-            <p className="text-zinc-500 text-sm">사용하실 서재 이름을 입력해주세요.<br/>동일한 이름으로 모든 기기에서 접속 가능합니다.</p>
+            <p className="text-zinc-500 text-sm">사용하실 서재 이름을 입력하고<br/>주로 이용하는 도서관을 선택해주세요.</p>
           </div>
+          
           <div className="space-y-6">
             <div className="space-y-4">
-              <input
-                type="text"
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                placeholder="예: 경호"
-                className="w-full px-4 py-3 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-lg focus:ring-2 focus:ring-purple-500"
-                onKeyDown={(e) => e.key === 'Enter' && handleEnterLibrary()}
-              />
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 ml-1">서재 주인 이름</label>
+                <input
+                  type="text"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="예: 경호"
+                  className="w-full px-4 py-3 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-lg focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div className="space-y-3 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2 mb-1">
+                  <MapPin className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300">내 동네 도서관 찾기</span>
+                </div>
+                
+                <div className="flex gap-2">
+                  <select 
+                    value={selectedRegion}
+                    onChange={(e) => setSelectedRegion(e.target.value)}
+                    className="flex-1 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-lg text-xs p-2 focus:ring-purple-500"
+                  >
+                    {REGIONS.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+                  </select>
+                  <select 
+                    value={selectedSubRegion}
+                    onChange={(e) => setSelectedSubRegion(e.target.value)}
+                    className="flex-1 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-lg text-xs p-2 focus:ring-purple-500"
+                  >
+                    {(SUB_REGIONS[selectedRegion] || [{code: '', name: '전체'}]).map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <div className="max-h-40 overflow-y-auto pr-1 no-scrollbar space-y-1.5 mt-2">
+                    {searchLibLoading ? (
+                      <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 text-purple-500 animate-spin" /></div>
+                    ) : availableLibs.length > 0 ? (
+                      availableLibs.map(lib => (
+                        <div 
+                          key={lib.libCode}
+                          onClick={() => setMyPrimaryLib({code: lib.libCode, name: lib.libName})}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
+                        >
+                          <div className="text-[11px] font-bold truncate">{lib.libName}</div>
+                          <div className={`text-[9px] mt-0.5 opacity-70 truncate ${myPrimaryLib?.code === lib.libCode ? 'text-white' : 'text-zinc-400'}`}>{lib.address}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center text-[10px] text-zinc-400">조회된 도서관이 없습니다.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <button
                 onClick={() => handleEnterLibrary()}
-                className="w-full py-4 bg-purple-600 text-white rounded-xl font-bold text-lg hover:bg-purple-700 transition-all"
+                disabled={!nameInput.trim() || !myPrimaryLib}
+                className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${(!nameInput.trim() || !myPrimaryLib) ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-lg'}`}
               >
                 서재 들어가기
               </button>
@@ -653,7 +831,7 @@ export default function Home() {
                             onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
                             className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
                           >
-                            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed italic">
                               {book.personal_memo || '남겨진 메모가 없습니다.'}
                             </p>
                           </div>
@@ -771,6 +949,52 @@ export default function Home() {
                   </span>
                 </div>
               </div>
+
+              {/* 실시간 도서관 대출 현황 섹션 */}
+              {myPrimaryLib && availabilityStatus && (
+                <div className="p-5 bg-zinc-50 dark:bg-zinc-800/50 rounded-3xl border border-zinc-100 dark:border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-purple-500" />
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-50">{myPrimaryLib.name} 현황</span>
+                    </div>
+                    {availabilityStatus.status === 'loading' && <Loader2 className="w-3.5 h-3.5 text-purple-500 animate-spin" />}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {availabilityStatus.status === 'available' && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-[11px] font-bold">
+                        <Check className="w-3.5 h-3.5" /> 지금 바로 빌릴 수 있어요!
+                      </div>
+                    )}
+                    {availabilityStatus.status === 'loaned' && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-[11px] font-bold">
+                        <X className="w-3.5 h-3.5" /> 현재 대출 중입니다.
+                      </div>
+                    )}
+                    {availabilityStatus.status === 'not_found' && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-xl text-[11px] font-bold">
+                        소장하고 있지 않습니다.
+                      </div>
+                    )}
+                    {availabilityStatus.status === 'error' && (
+                      <div className="text-[10px] text-zinc-400 italic">정보를 불러올 수 없습니다.</div>
+                    )}
+                  </div>
+
+                  {availabilityStatus.otherLibs && availabilityStatus.otherLibs.length > 0 && (
+                    <div className="pt-2 border-t border-zinc-200/50 dark:border-zinc-700/50">
+                      <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 mb-2">💡 상호대차 가능 도서관</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {availabilityStatus.otherLibs.slice(0, 5).map(name => (
+                          <span key={name} className="px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[9px] text-zinc-500 dark:text-zinc-400">{name}</span>
+                        ))}
+                        {availabilityStatus.otherLibs.length > 5 && <span className="text-[9px] text-zinc-400 self-center">외 {availabilityStatus.otherLibs.length - 5}곳</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-50 font-bold border-b border-zinc-100 dark:border-zinc-800 pb-2">

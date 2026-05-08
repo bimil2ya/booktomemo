@@ -1,10 +1,13 @@
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
 
 // 오타 수정: jmfgxmpgedcxyvaclci -> jmfgxmpgpedcxyvaclci ('p' 추가)
 const SUPABASE_URL = 'https://jmfgxmpgpedcxyvaclci.supabase.co'.trim();
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptZmd4bXBncGVkY3h5dmFjbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTMxOTIsImV4cCI6MjA5MzY2OTE5Mn0.DYfK9_Ei844hRGub0xKwGQr9XjmKswYqpQDc6zKMwBg'.trim();
+
+const LIBRARY_API_KEY = '985f849582e606d981778d87739821f68b14a8533c5296363a38c948dc988ced';
 
 function getSupabase() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -106,5 +109,67 @@ export async function deleteBooksAction(ids: number[]) {
   } catch (error: unknown) {
     console.error('deleteBooksAction Error:', error);
     return { error: `[선택 삭제 실패] ${getErrorMessage(error)}` };
+  }
+}
+
+/**
+ * 도서관 정보나루 API - 도서관 검색
+ */
+export async function searchLibrariesAction(region: string, dtl_region: string) {
+  try {
+    const response = await axios.get('http://data4library.kr/api/libSrch', {
+      params: {
+        authKey: LIBRARY_API_KEY,
+        region,
+        dtl_region,
+        format: 'json',
+        pageSize: 100
+      }
+    });
+    return { data: response.data.response.libs || [] };
+  } catch (error) {
+    console.error('searchLibrariesAction Error:', error);
+    return { error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * 도서관 정보나루 API - 특정 도서관 소장 여부 확인
+ */
+export async function checkBookAvailabilityAction(isbn: string, libCode: string) {
+  try {
+    const response = await axios.get('http://data4library.kr/api/bookExist', {
+      params: {
+        authKey: LIBRARY_API_KEY,
+        libCode,
+        isbn13: isbn,
+        format: 'json'
+      }
+    });
+    return { data: response.data.response.result };
+  } catch (error) {
+    console.error('checkBookAvailabilityAction Error:', error);
+    return { error: getErrorMessage(error) };
+  }
+}
+
+/**
+ * 도서관 정보나루 API - 특정 지역 내 도서 소장 도서관 찾기
+ */
+export async function searchLibrariesByBookAction(isbn: string, region: string, dtl_region: string) {
+  try {
+    const response = await axios.get('http://data4library.kr/api/libSrchByBook', {
+      params: {
+        authKey: LIBRARY_API_KEY,
+        isbn,
+        region,
+        dtl_region,
+        format: 'json'
+      }
+    });
+    return { data: response.data.response.libs || [] };
+  } catch (error) {
+    console.error('searchLibrariesByBookAction Error:', error);
+    return { error: getErrorMessage(error) };
   }
 }
