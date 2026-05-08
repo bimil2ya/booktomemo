@@ -13,10 +13,29 @@ function getSupabase() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object' && 'message' in error) return String(error.message);
-  return String(error);
+/**
+ * 에러 메시지를 사용자 친화적으로 변환
+ */
+function handleSupabaseError(error: any, context: string) {
+  console.error(`${context} Error:`, error);
+  
+  if (!error) return `[${context}] 알 수 없는 오류가 발생했습니다.`;
+
+  // Supabase/PostgREST 에러 코드 처리
+  if (error.code === 'PGRST204' || error.message?.includes('relation') && error.message?.includes('does not exist')) {
+    return `[데이터베이스 설정 오류] '${error.hint || '테이블'}'이(가) 존재하지 않습니다. 관리자에게 문의하세요.`;
+  }
+  
+  if (error.code === 'PGRST116') {
+    return `[조회 오류] 데이터를 찾을 수 없습니다.`;
+  }
+
+  if (error.message === 'FetchError' || error.code === 'ECONNREFUSED') {
+    return `[네트워크 오류] 서버와 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.`;
+  }
+
+  const msg = error.message || String(error);
+  return `[${context} 실패] ${msg}`;
 }
 
 /**
@@ -35,9 +54,7 @@ export async function checkLibraryExistsAction(ownerName: string) {
     if (error) throw error;
     return { exists: !!data };
   } catch (error: unknown) {
-    console.error('checkLibraryExistsAction Error:', error);
-    // 테이블이 없으면 생성 시도 (Supabase Dashboard에서 미리 생성하는 것이 좋지만, 런타임 에러 방지용)
-    return { error: getErrorMessage(error) };
+    return { error: handleSupabaseError(error, '서재 확인') };
   }
 }
 
@@ -51,8 +68,7 @@ export async function createLibraryAction(ownerName: string, password: string) {
     if (error) throw error;
     return { success: true };
   } catch (error: unknown) {
-    console.error('createLibraryAction Error:', error);
-    return { error: `[서재 생성 실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '서재 생성') };
   }
 }
 
@@ -72,13 +88,11 @@ export async function verifyLibraryPasswordAction(ownerName: string, password: s
       return { error: 'PASSWORD_INCORRECT' };
     }
   } catch (error: unknown) {
-    console.error('verifyLibraryPasswordAction Error:', error);
-    return { error: `[인증 실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '인증') };
   }
 }
 
 export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, masterCode: string) {
-  // 마스터 코드는 서버 사이드에서만 검증
   if (masterCode !== '8633') {
     return { error: 'MASTER_CODE_INCORRECT' };
   }
@@ -94,8 +108,7 @@ export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, 
     if (error) throw error;
     return { password: data.password };
   } catch (error: unknown) {
-    console.error('getLibraryPasswordWithMasterCodeAction Error:', error);
-    return { error: `[비밀번호 조회 실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '비밀번호 조회') };
   }
 }
 
@@ -115,8 +128,7 @@ export async function getBooksAction(owner_name: string, sortColumn: string, sor
     if (error) throw error;
     return { data };
   } catch (error: unknown) {
-    console.error('getBooksAction Error:', error);
-    return { error: `[조회실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '도서 조회') };
   }
 }
 
@@ -139,8 +151,7 @@ export async function saveBookAction(book: { isbn: string; title: string; author
     if (error) throw error;
     return { success: true };
   } catch (error: unknown) {
-    console.error('saveBookAction Error:', error);
-    return { error: `[저장실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '도서 저장') };
   }
 }
 
@@ -154,8 +165,6 @@ export interface UpdateBookData {
 export async function updateBookAction(id: number, editData: UpdateBookData) {
   try {
     const supabase = getSupabase();
-    
-    // 허용된 필드만 명시적으로 추출하고, 값이 있는 것만 업데이트 객체에 포함
     const cleanData: UpdateBookData = {};
     
     if (editData.title !== undefined) cleanData.title = editData.title;
@@ -167,8 +176,7 @@ export async function updateBookAction(id: number, editData: UpdateBookData) {
     if (error) throw error;
     return { success: true };
   } catch (error: unknown) {
-    console.error('updateBookAction Error:', error);
-    return { error: `[수정실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '도서 수정') };
   }
 }
 
@@ -179,8 +187,7 @@ export async function deleteBookAction(id: number) {
     if (error) throw error;
     return { success: true };
   } catch (error: unknown) {
-    console.error('deleteBookAction Error:', error);
-    return { error: `[삭제실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '도서 삭제') };
   }
 }
 
@@ -191,13 +198,12 @@ export async function deleteBooksAction(ids: number[]) {
     if (error) throw error;
     return { success: true };
   } catch (error: unknown) {
-    console.error('deleteBooksAction Error:', error);
-    return { error: `[선택 삭제 실패] ${getErrorMessage(error)}` };
+    return { error: handleSupabaseError(error, '선택 삭제') };
   }
 }
 
 /**
- * 도서관 정보나루 API - 도서관 검색
+ * 도서관 정보나루 API 관련은 Axios를 사용하므로 별도 처리
  */
 export async function searchLibrariesAction(region: string, dtl_region: string) {
   try {
@@ -211,15 +217,12 @@ export async function searchLibrariesAction(region: string, dtl_region: string) 
       }
     });
     return { data: response.data.response.libs || [] };
-  } catch (error) {
+  } catch (error: any) {
     console.error('searchLibrariesAction Error:', error);
-    return { error: getErrorMessage(error) };
+    return { error: error.message || '도서관 목록을 가져오지 못했습니다.' };
   }
 }
 
-/**
- * 도서관 정보나루 API - 특정 도서관 소장 여부 확인
- */
 export async function checkBookAvailabilityAction(isbn: string, libCode: string) {
   try {
     const response = await axios.get('http://data4library.kr/api/bookExist', {
@@ -231,15 +234,12 @@ export async function checkBookAvailabilityAction(isbn: string, libCode: string)
       }
     });
     return { data: response.data.response.result };
-  } catch (error) {
+  } catch (error: any) {
     console.error('checkBookAvailabilityAction Error:', error);
-    return { error: getErrorMessage(error) };
+    return { error: error.message || '소장 여부 확인에 실패했습니다.' };
   }
 }
 
-/**
- * 도서관 정보나루 API - 특정 지역 내 도서 소장 도서관 찾기
- */
 export async function searchLibrariesByBookAction(isbn: string, region: string, dtl_region: string) {
   try {
     const response = await axios.get('http://data4library.kr/api/libSrchByBook', {
@@ -252,8 +252,8 @@ export async function searchLibrariesByBookAction(isbn: string, region: string, 
       }
     });
     return { data: response.data.response.libs || [] };
-  } catch (error) {
+  } catch (error: any) {
     console.error('searchLibrariesByBookAction Error:', error);
-    return { error: getErrorMessage(error) };
+    return { error: error.message || '상호대차 조회를 완료하지 못했습니다.' };
   }
 }
