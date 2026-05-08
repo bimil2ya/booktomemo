@@ -100,7 +100,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.6.0";
+  const VERSION = "v1.6.1";
 
   // 상세 모달 도서관 정보 상태
   const [availabilityStatus, setAvailabilityStatus] = useState<{
@@ -108,7 +108,7 @@ export default function Home() {
     otherLibs?: string[];
   } | null>(null);
 
-  // 이름 정규화 함수
+  // 이름 정규화 함수 (예: "경호의 서재" -> "경호")
   const normalizeName = (name: string) => {
     return name.replace(/\s*의\s*서재\s*$/, '').replace(/\s*의서재\s*$/, '').trim();
   };
@@ -125,6 +125,7 @@ export default function Home() {
     const history = localStorage.getItem('library_history');
     if (history) {
       const parsedHistory: string[] = JSON.parse(history);
+      // 기존 히스토리 데이터 정규화
       const normalizedHistory = Array.from(new Set(parsedHistory.map(normalizeName)));
       setLibraryHistory(normalizedHistory);
     }
@@ -172,7 +173,7 @@ export default function Home() {
   const checkAvailability = useCallback(async (book: SavedBook | Book) => {
     if (!myPrimaryLib) return;
     
-    // ISBN13 추출 (카카오 API 응답에서 13자리 숫자 찾기)
+    // ISBN13 추출
     const isbn13 = book.isbn.split(' ').find(s => s.length === 13);
     if (!isbn13) {
       setAvailabilityStatus({ status: 'error' });
@@ -184,26 +185,31 @@ export default function Home() {
     try {
       // 1. 주 도서관 확인
       const { data: avail, error: availError } = await checkBookAvailabilityAction(isbn13, myPrimaryLib.code);
-      
       if (availError) throw new Error(availError);
 
-      if (avail.hasBook === 'Y') {
-        setAvailabilityStatus({ 
-          status: avail.loanAvailable === 'Y' ? 'available' : 'loaned' 
-        });
-      } else {
-        // 2. 상호대차 (해당 시군구 전체) 확인
+      // 상호대차 조회가 필요한 경우 (주 도서관에 없거나 대출 중일 때)
+      if (avail.hasBook === 'N' || avail.loanAvailable === 'N') {
         const { data: others, error: othersError } = await searchLibrariesByBookAction(isbn13, selectedRegion, selectedSubRegion);
         if (othersError) throw othersError;
 
-        if (others && others.length > 0) {
+        const otherLibNames = others ? others.map((l: LibApiResponse) => l.lib.libName) : [];
+
+        if (avail.hasBook === 'Y') {
+          // 주 도서관 소장 중이지만 대출 불가 -> 상호대차 정보와 함께 표시
           setAvailabilityStatus({ 
-            status: 'not_found', 
-            otherLibs: others.map((l: LibApiResponse) => l.lib.libName) 
+            status: 'loaned', 
+            otherLibs: otherLibNames 
           });
         } else {
-          setAvailabilityStatus({ status: 'not_found', otherLibs: [] });
+          // 주 도서관 미소장
+          setAvailabilityStatus({ 
+            status: 'not_found', 
+            otherLibs: otherLibNames 
+          });
         }
+      } else {
+        // 주 도서관 대출 가능
+        setAvailabilityStatus({ status: 'available' });
       }
     } catch (e) {
       console.error(e);
@@ -532,7 +538,7 @@ export default function Home() {
                         <div 
                           key={lib.libCode}
                           onClick={() => setMyPrimaryLib({code: lib.libCode, name: lib.libName})}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
                         >
                           <div className="text-[11px] font-bold truncate">{lib.libName}</div>
                           <div className={`text-[9px] mt-0.5 opacity-70 truncate ${myPrimaryLib?.code === lib.libCode ? 'text-white' : 'text-zinc-400'}`}>{lib.address}</div>
@@ -831,7 +837,7 @@ export default function Home() {
                             onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
                             className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
                           >
-                            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed italic">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
                               {book.personal_memo || '남겨진 메모가 없습니다.'}
                             </p>
                           </div>
@@ -968,31 +974,39 @@ export default function Home() {
                       </div>
                     )}
                     {availabilityStatus.status === 'loaned' && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-[11px] font-bold">
-                        <X className="w-3.5 h-3.5" /> 현재 대출 중입니다.
+                      <div className="flex flex-col gap-2 w-full">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-[11px] font-bold w-fit">
+                          <X className="w-3.5 h-3.5" /> 현재 대출 중입니다.
+                        </div>
+                        {availabilityStatus.otherLibs && availabilityStatus.otherLibs.length > 0 && (
+                          <div className="mt-1 px-1">
+                            <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                              💡 상호대차 추천: {availabilityStatus.otherLibs[0]}
+                              {availabilityStatus.otherLibs.length > 1 && ` 외 ${availabilityStatus.otherLibs.length - 1}곳`}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     {availabilityStatus.status === 'not_found' && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-xl text-[11px] font-bold">
-                        소장하고 있지 않습니다.
+                      <div className="flex flex-col gap-2 w-full">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-xl text-[11px] font-bold w-fit">
+                          소장하고 있지 않습니다.
+                        </div>
+                        {availabilityStatus.otherLibs && availabilityStatus.otherLibs.length > 0 && (
+                          <div className="mt-1 px-1">
+                            <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                              💡 상호대차 가능 도서관: {availabilityStatus.otherLibs[0]}
+                              {availabilityStatus.otherLibs.length > 1 && ` 외 ${availabilityStatus.otherLibs.length - 1}곳`}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     {availabilityStatus.status === 'error' && (
                       <div className="text-[10px] text-zinc-400 italic">정보를 불러올 수 없습니다.</div>
                     )}
                   </div>
-
-                  {availabilityStatus.otherLibs && availabilityStatus.otherLibs.length > 0 && (
-                    <div className="pt-2 border-t border-zinc-200/50 dark:border-zinc-700/50">
-                      <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 mb-2">💡 상호대차 가능 도서관</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {availabilityStatus.otherLibs.slice(0, 5).map(name => (
-                          <span key={name} className="px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[9px] text-zinc-500 dark:text-zinc-400">{name}</span>
-                        ))}
-                        {availabilityStatus.otherLibs.length > 5 && <span className="text-[9px] text-zinc-400 self-center">외 {availabilityStatus.otherLibs.length - 5}곳</span>}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
