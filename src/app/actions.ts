@@ -57,21 +57,24 @@ export async function saveBookAction(book: { isbn: string; title: string; author
   }
 }
 
-export async function updateBookAction(id: number, editData: any) {
+export interface UpdateBookData {
+  title?: string;
+  authors?: string;
+  publisher?: string;
+  personal_memo?: string;
+}
+
+export async function updateBookAction(id: number, editData: UpdateBookData) {
   try {
     const supabase = getSupabase();
     
     // 허용된 필드만 명시적으로 추출하고, 값이 있는 것만 업데이트 객체에 포함
-    const allowedFields = ['title', 'authors', 'publisher', 'personal_memo'];
-    const cleanData: any = {};
+    const cleanData: UpdateBookData = {};
     
-    allowedFields.forEach(field => {
-      if (editData[field] !== undefined) {
-        cleanData[field] = editData[field];
-      }
-    });
-
-    console.log(`[Update] ID: ${id}, Data:`, cleanData);
+    if (editData.title !== undefined) cleanData.title = editData.title;
+    if (editData.authors !== undefined) cleanData.authors = editData.authors;
+    if (editData.publisher !== undefined) cleanData.publisher = editData.publisher;
+    if (editData.personal_memo !== undefined) cleanData.personal_memo = editData.personal_memo;
 
     const { error } = await supabase.from('books').update(cleanData).eq('id', id);
     if (error) throw error;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import axios from 'axios';
@@ -77,13 +77,7 @@ export default function Home() {
   }, []);
 
   // 도서 목록 가져오기 (Supabase)
-  useEffect(() => {
-    if (libraryName) {
-      fetchSavedBooks();
-    }
-  }, [libraryName]);
-
-  const fetchSavedBooks = async () => {
+  const fetchSavedBooks = useCallback(async () => {
     if (!libraryName) return;
     try {
       const { data, error } = await getBooksAction(libraryName, sortColumn, sortOrder);
@@ -92,12 +86,18 @@ export default function Home() {
     } catch (error) {
       console.error('Error fetching books:', error);
     }
-  };
+  }, [libraryName, sortColumn, sortOrder]);
+
+  useEffect(() => {
+    if (libraryName) {
+      fetchSavedBooks();
+    }
+  }, [libraryName, fetchSavedBooks]);
 
   // 정렬이 변경될 때마다 다시 가져오기
   useEffect(() => {
     if (libraryName) fetchSavedBooks();
-  }, [sortColumn, sortOrder]);
+  }, [sortColumn, sortOrder, libraryName, fetchSavedBooks]);
 
   const handleEnterLibrary = () => {
     const finalName = nameInput.trim() || '경호의서재';
@@ -168,7 +168,7 @@ export default function Home() {
       } else {
         alert('이미지에서 책 정보를 찾지 못했습니다.');
       }
-    } catch (error) {
+    } catch {
       alert('사진 인식 중 오류가 발생했습니다.');
     } finally {
       setOcrLoading(false);
@@ -190,7 +190,7 @@ export default function Home() {
         owner_name: libraryName
       };
 
-      const { success, error } = await saveBookAction(newBook);
+      const { error } = await saveBookAction(newBook);
 
       if (error === 'ALREADY_EXISTS') {
         if (!confirm('이미 저장된 책입니다. 다시 저장할까요?')) {
@@ -513,10 +513,12 @@ export default function Home() {
               <img 
                 src={selectedBook.thumbnail || '/file.svg'} 
                 className="w-full h-full object-contain p-8 scale-110 blur-xl opacity-20 absolute inset-0" 
+                alt=""
               />
               <img 
                 src={selectedBook.thumbnail || '/file.svg'} 
                 className="w-full h-full object-contain p-4 relative z-10 drop-shadow-xl" 
+                alt={selectedBook.title}
               />
               <button 
                 onClick={() => setSelectedBook(null)}
