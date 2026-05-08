@@ -60,7 +60,12 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.5.7";
+  const VERSION = "v1.5.8";
+
+  // 이름 정규화 함수 (예: "경호의 서재" -> "경호")
+  const normalizeName = (name: string) => {
+    return name.replace(/\s*의\s*서재\s*$/, '').replace(/\s*의서재\s*$/, '').trim();
+  };
 
   // 상세 모달 상태
   const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
@@ -69,10 +74,15 @@ export default function Home() {
   useEffect(() => {
     setIsMounted(true);
     const savedName = localStorage.getItem('library_owner_name');
-    if (savedName) setLibraryName(savedName);
+    if (savedName) setLibraryName(normalizeName(savedName));
 
     const history = localStorage.getItem('library_history');
-    if (history) setLibraryHistory(JSON.parse(history));
+    if (history) {
+      const parsedHistory: string[] = JSON.parse(history);
+      // 기존 히스토리 데이터 정규화
+      const normalizedHistory = Array.from(new Set(parsedHistory.map(normalizeName)));
+      setLibraryHistory(normalizedHistory);
+    }
 
     const lastMode = localStorage.getItem('save_mode') as 'shortcut' | 'native';
     if (lastMode) setSaveMode(lastMode);
@@ -114,7 +124,11 @@ export default function Home() {
   }, [sortColumn, sortOrder, libraryName, fetchSavedBooks]);
 
   const handleEnterLibrary = (selectedName?: string) => {
-    const finalName = selectedName || nameInput.trim() || '경호';
+    const rawName = selectedName || nameInput.trim() || '경호';
+    const finalName = normalizeName(rawName);
+    
+    if (!finalName) return;
+
     localStorage.setItem('library_owner_name', finalName);
     
     // 히스토리 업데이트
@@ -123,6 +137,7 @@ export default function Home() {
     setLibraryHistory(newHistory);
     
     setLibraryName(finalName);
+    setNameInput('');
   };
 
   const handleLogout = () => {
@@ -376,7 +391,7 @@ export default function Home() {
                       <span className="text-sm font-bold text-zinc-600 dark:text-zinc-300">{name}의 서재</span>
                       <button 
                         onClick={(e) => removeFromHistory(e, name)}
-                        className="p-0.5 text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 text-zinc-400 hover:text-red-500 transition-all rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
                       >
                         <X className="w-3 h-3" />
                       </button>
