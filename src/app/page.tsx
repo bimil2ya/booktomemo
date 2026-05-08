@@ -51,6 +51,9 @@ export default function Home() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
+  const [swipingId, setSwipingId] = useState<number | null>(null);
+  const touchStartX = useRef<number>(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
@@ -417,68 +420,109 @@ export default function Home() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {savedBooks.map((book) => (
-                <div key={book.id} onClick={() => editingId !== book.id && setSelectedBook(book)} className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 overflow-hidden shadow-sm flex flex-col group transition-all hover:shadow-md cursor-pointer">
-                  <div className="p-4 flex gap-4">
-                    <img src={book.thumbnail || '/file.svg'} className="w-20 h-28 object-cover rounded-xl shadow-xs" alt={book.title} />
-                    <div className="flex-1 min-w-0 flex flex-col justify-between">
-                      <div className="space-y-1">
-                        {editingId === book.id ? (
-                          <input 
-                            value={editFormData.title || ''} 
-                            onChange={e => setEditFormData({...editFormData, title: e.target.value})} 
-                            className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-bold border-none focus:ring-1 focus:ring-purple-500"
-                          />
-                        ) : (
-                          <h3 className="font-bold text-zinc-900 dark:text-zinc-50 text-sm line-clamp-2">{book.title}</h3>
-                        )}
-                        
-                        {editingId === book.id ? (
-                          <input 
-                            value={editFormData.authors || ''} 
-                            onChange={e => setEditFormData({...editFormData, authors: e.target.value})} 
-                            className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-xs border-none focus:ring-1 focus:ring-purple-500"
-                          />
-                        ) : (
-                          <p className="text-purple-600 text-[11px] font-bold truncate">{book.authors}</p>
-                        )}
-                        
-                        <p className="text-zinc-400 text-[10px]">{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-1 mt-2">
-                        {editingId === book.id ? (
-                          <>
-                            <button onClick={(e) => { e.stopPropagation(); saveEdit(); }} className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"><Check className="w-4 h-4"/></button>
-                            <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl"><X className="w-4 h-4"/></button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }} className="p-2 text-zinc-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors"><Edit2 className="w-4 h-4"/></button>
-                            <button onClick={(e) => { e.stopPropagation(); deleteSavedBook(book.id!); }} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><Trash2 className="w-4 h-4"/></button>
-                          </>
-                        )}
-                      </div>
+                <div 
+                  key={book.id} 
+                  className="relative overflow-hidden rounded-3xl group"
+                  onTouchStart={(e) => {
+                    touchStartX.current = e.touches[0].clientX;
+                  }}
+                  onTouchMove={(e) => {
+                    const touchX = e.touches[0].clientX;
+                    const diff = touchStartX.current - touchX;
+                    // 왼쪽으로 50px 이상 스와이프하면 삭제 모드
+                    if (diff > 50) setSwipingId(book.id!);
+                    // 오른쪽으로 50px 이상 스와이프하면 취소
+                    if (diff < -50) setSwipingId(null);
+                  }}
+                >
+                  {/* 스와이프 시 나타나는 배경 버튼들 */}
+                  <div className={`absolute inset-0 flex justify-end transition-opacity duration-300 ${swipingId === book.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    <div className="flex w-full h-full">
+                      <button 
+                        onClick={() => setSwipingId(null)}
+                        className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-sm"
+                      >
+                        취소
+                      </button>
+                      <button 
+                        onClick={() => { deleteSavedBook(book.id!); setSwipingId(null); }}
+                        className="flex-1 bg-red-500 text-white font-bold text-sm"
+                      >
+                        삭제
+                      </button>
                     </div>
                   </div>
 
-                  <div className="px-4 pb-4 mt-auto">
-                    {editingId === book.id ? (
-                      <textarea
-                        value={editFormData.personal_memo || ''}
-                        onChange={e => setEditFormData({...editFormData, personal_memo: e.target.value})}
-                        placeholder="개인 메모를 입력하세요..."
-                        className="w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none"
-                      />
-                    ) : (
-                      <div 
-                        onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
-                        className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
-                      >
-                        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
-                          {book.personal_memo || '남겨진 메모가 없습니다.'}
-                        </p>
+                  {/* 메인 카드 콘텐츠 */}
+                  <div 
+                    onClick={() => swipingId !== book.id && editingId !== book.id && setSelectedBook(book)} 
+                    className={`bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300 cursor-pointer ${swipingId === book.id ? '-translate-x-full' : 'translate-x-0'}`}
+                  >
+                    <div className="p-4 flex gap-4">
+                      <img src={book.thumbnail || '/file.svg'} className="w-20 h-28 object-cover rounded-xl shadow-xs" alt={book.title} />
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        <div className="space-y-1">
+                          {editingId === book.id ? (
+                            <input 
+                              value={editFormData.title || ''} 
+                              onChange={e => setEditFormData({...editFormData, title: e.target.value})} 
+                              className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-bold border-none focus:ring-1 focus:ring-purple-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <h3 className="font-bold text-zinc-900 dark:text-zinc-50 text-sm line-clamp-2">{book.title}</h3>
+                          )}
+                          
+                          {editingId === book.id ? (
+                            <input 
+                              value={editFormData.authors || ''} 
+                              onChange={e => setEditFormData({...editFormData, authors: e.target.value})} 
+                              className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-xs border-none focus:ring-1 focus:ring-purple-500"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <p className="text-purple-600 text-[11px] font-bold truncate">{book.authors}</p>
+                          )}
+                          
+                          <p className="text-zinc-400 text-[10px]">{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-1 mt-2">
+                          {editingId === book.id ? (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); saveEdit(); }} className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"><Check className="w-4 h-4"/></button>
+                              <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl"><X className="w-4 h-4"/></button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }} className="p-2 text-zinc-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors"><Edit2 className="w-4 h-4"/></button>
+                              <button onClick={(e) => { e.stopPropagation(); deleteSavedBook(book.id!); }} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><Trash2 className="w-4 h-4"/></button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    </div>
+
+                    <div className="px-4 pb-4 mt-auto">
+                      {editingId === book.id ? (
+                        <textarea
+                          value={editFormData.personal_memo || ''}
+                          onChange={e => setEditFormData({...editFormData, personal_memo: e.target.value})}
+                          placeholder="개인 메모를 입력하세요..."
+                          className="w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <div 
+                          onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
+                          className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
+                        >
+                          <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
+                            {book.personal_memo || '남겨진 메모가 없습니다.'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
