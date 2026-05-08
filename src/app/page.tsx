@@ -1,10 +1,23 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X, List, LayoutGrid, Clock, MapPin, Building2, Loader2 } from 'lucide-react';
+import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X, List, LayoutGrid, Clock, MapPin, Building2, Loader2, Key, Lock, Eye, EyeOff } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import axios from 'axios';
-import { getBooksAction, saveBookAction, updateBookAction, deleteBookAction, deleteBooksAction, searchLibrariesAction, checkBookAvailabilityAction, searchLibrariesByBookAction } from './actions';
+import { 
+  getBooksAction, 
+  saveBookAction, 
+  updateBookAction, 
+  deleteBookAction, 
+  deleteBooksAction, 
+  searchLibrariesAction, 
+  checkBookAvailabilityAction, 
+  searchLibrariesByBookAction,
+  checkLibraryExistsAction,
+  createLibraryAction,
+  verifyLibraryPasswordAction,
+  getLibraryPasswordWithMasterCodeAction
+} from './actions';
 
 interface Book {
   title: string;
@@ -68,8 +81,18 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'search' | 'library'>('search');
   const [libraryName, setLibraryName] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState('경호');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [libraryHistory, setLibraryHistory] = useState<string[]>([]);
   
+  // 보안 관련 상태
+  const [isExistingLibrary, setIsExistingLibrary] = useState<boolean | null>(null);
+  const [checkingLibrary, setCheckingLibrary] = useState(false);
+  const [enteringLibrary, setEnteringLibrary] = useState(false);
+  const [showMasterCodeInput, setShowMasterCodeInput] = useState(false);
+  const [masterCodeInput, setMasterCodeInput] = useState('');
+  const [recoveredPassword, setRecoveredPassword] = useState<string | null>(null);
+
   // 도서관 설정 상태
   const [selectedRegion, setSelectedRegion] = useState('31'); // 경기 기본
   const [selectedSubRegion, setSelectedSubRegion] = useState('31130'); // 남양주 기본
@@ -100,7 +123,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.6.2";
+  const VERSION = "v1.7.0"; // 버전 업그레이드 (비밀번호 보안 기능 추가)
 
   // 상세 모달 도서관 정보 상태
   const [availabilityStatus, setAvailabilityStatus] = useState<{
@@ -143,6 +166,26 @@ export default function Home() {
       searchBooks(q, false);
     }
   }, []);
+
+  // 서재 이름 입력 변경 시 존재 여부 확인 (디바운싱 적용 가능하지만 여기선 단순 처리)
+  useEffect(() => {
+    const checkLibrary = async () => {
+      const finalName = normalizeName(nameInput);
+      if (finalName.length < 2) {
+        setIsExistingLibrary(null);
+        return;
+      }
+      setCheckingLibrary(true);
+      const { exists, error } = await checkLibraryExistsAction(finalName);
+      if (!error) {
+        setIsExistingLibrary(exists ?? false);
+      }
+      setCheckingLibrary(false);
+    };
+
+    const timer = setTimeout(checkLibrary, 500);
+    return () => clearTimeout(timer);
+  }, [nameInput]);
 
   // 탭 변경 시 선택 초기화
   useEffect(() => {
@@ -248,16 +291,49 @@ export default function Home() {
     if (libraryName) fetchSavedBooks();
   }, [sortColumn, sortOrder, libraryName, fetchSavedBooks]);
 
-  const handleEnterLibrary = (selectedName?: string) => {
+  const handleEnterLibrary = async (selectedName?: string) => {
     const rawName = selectedName || nameInput.trim() || '경호';
     const finalName = normalizeName(rawName);
     
     if (!finalName) return;
-    if (!myPrimaryLib && !selectedName) {
-      alert('도서관을 먼저 선택해주세요.');
-      return;
+    
+    // 비밀번호 체크 로직 추가
+    if (!selectedName) {
+      if (!passwordInput.trim()) {
+        alert('비밀번호를 입력해주세요.');
+        return;
+      }
+
+      setEnteringLibrary(true);
+      if (isExistingLibrary) {
+        // 기존 서재: 비밀번호 확인
+        const { success, error } = await verifyLibraryPasswordAction(finalName, passwordInput);
+        if (error === 'PASSWORD_INCORRECT') {
+          alert('비밀번호가 올바르지 않습니다.');
+          setEnteringLibrary(false);
+          return;
+        } else if (error) {
+          alert(`오류 발생: ${error}`);
+          setEnteringLibrary(false);
+          return;
+        }
+      } else {
+        // 신규 서재: 서재 정보 저장
+        if (!myPrimaryLib) {
+          alert('도서관을 먼저 선택해주세요.');
+          setEnteringLibrary(false);
+          return;
+        }
+        const { error } = await createLibraryAction(finalName, passwordInput);
+        if (error) {
+          alert(`서재 생성 실패: ${error}`);
+          setEnteringLibrary(false);
+          return;
+        }
+      }
     }
 
+    // 성공 시 입장 처리
     localStorage.setItem('library_owner_name', finalName);
     if (myPrimaryLib) {
       localStorage.setItem('my_primary_lib', JSON.stringify(myPrimaryLib));
@@ -271,13 +347,34 @@ export default function Home() {
     setLibraryHistory(newHistory);
     
     setLibraryName(finalName);
+    setEnteringLibrary(false);
+    setPasswordInput(''); // 입력 초기화
+  };
+
+  // 마스터 코드로 비밀번호 찾기
+  const handleFindPassword = async () => {
+    const finalName = normalizeName(nameInput);
+    if (!finalName) return;
+
+    if (!masterCodeInput.trim()) {
+      alert('마스터 코드를 입력해주세요.');
+      return;
+    }
+
+    const { password, error } = await getLibraryPasswordWithMasterCodeAction(finalName, masterCodeInput);
+    if (error === 'MASTER_CODE_INCORRECT') {
+      alert('마스터 코드가 올바르지 않습니다.');
+    } else if (error) {
+      alert(`조회 실패: ${error}`);
+    } else if (password) {
+      setRecoveredPassword(password);
+    }
   };
 
   const handleLogout = () => {
     if (confirm('서재에서 나가시겠습니까?')) {
       localStorage.removeItem('library_owner_name');
       setLibraryName(null);
-      // setNameInput('경호'); // Keep default
       setSavedBooks([]);
     }
   };
@@ -495,7 +592,12 @@ export default function Home() {
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-zinc-400 ml-1">서재 주인 이름</label>
+                <div className="flex justify-between items-end px-1">
+                  <label className="text-[10px] font-bold text-zinc-400">서재 주인 이름</label>
+                  {checkingLibrary && <Loader2 className="w-3 h-3 text-purple-500 animate-spin" />}
+                  {!checkingLibrary && isExistingLibrary === true && <span className="text-[9px] font-bold text-blue-500">기존 서재 발견</span>}
+                  {!checkingLibrary && isExistingLibrary === false && <span className="text-[9px] font-bold text-purple-500">신규 서재 생성</span>}
+                </div>
                 <input
                   type="text"
                   value={nameInput}
@@ -505,6 +607,43 @@ export default function Home() {
                 />
               </div>
 
+              {/* 비밀번호 입력란 (이름이 입력된 경우에만 표시) */}
+              {normalizeName(nameInput).length >= 2 && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <label className="text-[10px] font-bold text-zinc-400 ml-1">
+                    {isExistingLibrary ? '서재 비밀번호' : '사용할 비밀번호 설정'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      placeholder={isExistingLibrary ? "비밀번호를 입력하세요" : "비밀번호를 정해주세요"}
+                      className="w-full pl-4 pr-12 py-3 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-lg focus:ring-2 focus:ring-purple-500"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-zinc-400"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  
+                  {isExistingLibrary && (
+                    <div className="flex justify-end">
+                      <button 
+                        onClick={() => setShowMasterCodeInput(true)}
+                        className="text-[10px] font-bold text-zinc-400 hover:text-purple-600 transition-colors"
+                      >
+                        비밀번호가 생각나지 않으세요?
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 도서관 선택 섹션 (신규 생성 시에만 중요하지만, 교체 가능하도록 유지) */}
               <div className="space-y-3 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800">
                 <div className="flex items-center gap-2 mb-1">
                   <MapPin className="w-3.5 h-3.5 text-purple-500" />
@@ -537,7 +676,7 @@ export default function Home() {
                         <div 
                           key={lib.libCode}
                           onClick={() => setMyPrimaryLib({code: lib.libCode, name: lib.libName})}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
                         >
                           <div className="text-[11px] font-bold truncate">{lib.libName}</div>
                           <div className={`text-[9px] mt-0.5 opacity-70 truncate ${myPrimaryLib?.code === lib.libCode ? 'text-white' : 'text-zinc-400'}`}>{lib.address}</div>
@@ -552,10 +691,10 @@ export default function Home() {
 
               <button
                 onClick={() => handleEnterLibrary()}
-                disabled={!nameInput.trim() || !myPrimaryLib}
-                className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${(!nameInput.trim() || !myPrimaryLib) ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-lg'}`}
+                disabled={!nameInput.trim() || !passwordInput.trim() || enteringLibrary || checkingLibrary}
+                className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2 ${(!nameInput.trim() || !passwordInput.trim() || enteringLibrary || checkingLibrary) ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-lg'}`}
               >
-                서재 들어가기
+                {enteringLibrary ? <Loader2 className="w-5 h-5 animate-spin" /> : isExistingLibrary ? '서재 입장하기' : '서재 새로 만들기'}
               </button>
             </div>
 
@@ -568,7 +707,10 @@ export default function Home() {
                   {libraryHistory.map((name) => (
                     <div 
                       key={name}
-                      onClick={() => handleEnterLibrary(name)}
+                      onClick={() => {
+                        setNameInput(name);
+                        // 입장하려면 비번을 다시 쳐야 함 (보안)
+                      }}
                       className="group flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:border-purple-300 dark:hover:border-purple-900/50 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
                     >
                       <span className="text-sm font-bold text-zinc-600 dark:text-zinc-300">{name}의 서재</span>
@@ -584,6 +726,66 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* 마스터 코드로 비밀번호 조회 모달 */}
+          {showMasterCodeInput && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
+              <div className="bg-white dark:bg-zinc-900 w-full max-w-sm p-6 rounded-[2rem] shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto text-zinc-400">
+                    <Key className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">비밀번호 찾기</h3>
+                  <p className="text-xs text-zinc-500">관리자(마스터) 코드를 입력하세요.</p>
+                </div>
+
+                {recoveredPassword ? (
+                  <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-900/50 text-center animate-in zoom-in-95 duration-200">
+                    <p className="text-[10px] text-purple-400 font-bold uppercase mb-1">찾은 비밀번호</p>
+                    <p className="text-2xl font-black text-purple-600 dark:text-purple-400 tracking-widest">{recoveredPassword}</p>
+                    <button 
+                      onClick={() => {
+                        setPasswordInput(recoveredPassword);
+                        setShowMasterCodeInput(false);
+                        setRecoveredPassword(null);
+                        setMasterCodeInput('');
+                      }}
+                      className="mt-4 text-xs font-bold text-purple-600 underline"
+                    >
+                      이 비밀번호로 바로 입력하기
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <input
+                      type="password"
+                      value={masterCodeInput}
+                      onChange={(e) => setMasterCodeInput(e.target.value)}
+                      placeholder="마스터 코드 입력"
+                      className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-800 rounded-xl text-center text-xl tracking-widest font-bold focus:ring-2 focus:ring-purple-500"
+                    />
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setShowMasterCodeInput(false);
+                          setMasterCodeInput('');
+                        }}
+                        className="flex-1 py-3 text-zinc-500 font-bold text-sm bg-zinc-100 dark:bg-zinc-800 rounded-xl"
+                      >
+                        취소
+                      </button>
+                      <button 
+                        onClick={handleFindPassword}
+                        className="flex-1 py-3 bg-purple-600 text-white font-bold text-sm rounded-xl shadow-lg"
+                      >
+                        조회하기
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -836,7 +1038,7 @@ export default function Home() {
                             onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
                             className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
                           >
-                            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed italic">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
                               {book.personal_memo || '남겨진 메모가 없습니다.'}
                             </p>
                           </div>

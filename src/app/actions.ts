@@ -19,6 +19,90 @@ function getErrorMessage(error: unknown) {
   return String(error);
 }
 
+/**
+ * 서재 관련 액션 (비밀번호 보안)
+ */
+
+export async function checkLibraryExistsAction(ownerName: string) {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('libraries')
+      .select('owner_name')
+      .eq('owner_name', ownerName)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { exists: !!data };
+  } catch (error: unknown) {
+    console.error('checkLibraryExistsAction Error:', error);
+    // 테이블이 없으면 생성 시도 (Supabase Dashboard에서 미리 생성하는 것이 좋지만, 런타임 에러 방지용)
+    return { error: getErrorMessage(error) };
+  }
+}
+
+export async function createLibraryAction(ownerName: string, password: string) {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('libraries')
+      .insert([{ owner_name: ownerName, password }]);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('createLibraryAction Error:', error);
+    return { error: `[서재 생성 실패] ${getErrorMessage(error)}` };
+  }
+}
+
+export async function verifyLibraryPasswordAction(ownerName: string, password: string) {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('libraries')
+      .select('password')
+      .eq('owner_name', ownerName)
+      .single();
+
+    if (error) throw error;
+    if (data.password === password) {
+      return { success: true };
+    } else {
+      return { error: 'PASSWORD_INCORRECT' };
+    }
+  } catch (error: unknown) {
+    console.error('verifyLibraryPasswordAction Error:', error);
+    return { error: `[인증 실패] ${getErrorMessage(error)}` };
+  }
+}
+
+export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, masterCode: string) {
+  // 마스터 코드는 서버 사이드에서만 검증
+  if (masterCode !== '8633') {
+    return { error: 'MASTER_CODE_INCORRECT' };
+  }
+
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('libraries')
+      .select('password')
+      .eq('owner_name', ownerName)
+      .single();
+
+    if (error) throw error;
+    return { password: data.password };
+  } catch (error: unknown) {
+    console.error('getLibraryPasswordWithMasterCodeAction Error:', error);
+    return { error: `[비밀번호 조회 실패] ${getErrorMessage(error)}` };
+  }
+}
+
+/**
+ * 도서 관련 액션
+ */
+
 export async function getBooksAction(owner_name: string, sortColumn: string, sortOrder: string) {
   try {
     const supabase = getSupabase();
