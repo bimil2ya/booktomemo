@@ -862,7 +862,7 @@ export default function Home() {
                           />
                         </th>
                         <th onClick={() => toggleSort('title')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
-                        <th onClick={() => toggleSort('authors')} className="px-4 py-3 w-24 cursor-pointer hover:text-purple-600 transition-colors">저자</th>
+                        <th onClick={() => toggleSort('authors')} className="px-4 py-3 w-[70px] cursor-pointer hover:text-purple-600 transition-colors">저자</th>
                         <th className="px-4 py-3 w-10"></th>
                       </tr>
                     </thead>
