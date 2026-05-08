@@ -21,14 +21,16 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "BookToMemo",
-  description: "도서 검색 및 애플 메모 연동 앱",
+  title: "읽고픈 책들",
+  description: "도서 검색 및 보관함",
+  manifest: "/manifest.json",
   icons: {
+    icon: "/icon.svg",
     apple: "/icon.svg",
   },
   appleWebApp: {
     capable: true,
-    title: "BookToMemo",
+    title: "읽고픈 책들",
     statusBarStyle: "default",
   },
 };

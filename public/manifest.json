@@ -1,0 +1,17 @@
+{
+  "name": "읽고픈 책들",
+  "short_name": "읽고픈 책들",
+  "description": "도서 검색 및 보관함",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#9333EA",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
