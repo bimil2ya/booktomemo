@@ -861,7 +861,7 @@ export default function Home() {
                           />
                         </th>
                         <th onClick={() => toggleSort('title')} className="px-2 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
-                        <th onClick={() => toggleSort('authors')} className="px-2 py-3 w-[80px] text-right cursor-pointer hover:text-purple-600 transition-colors">저자</th>
+                        <th onClick={() => toggleSort('authors')} className="px-2 py-3 w-[80px] text-left cursor-pointer hover:text-purple-600 transition-colors">저자</th>
                         <th className="px-2 py-3 w-8"></th>
                       </tr>
                     </thead>
@@ -877,7 +877,7 @@ export default function Home() {
                             />
                           </td>
                           <td onClick={() => setSelectedBook(book)} className="px-2 py-3 text-sm font-bold text-zinc-900 dark:text-zinc-50 cursor-pointer truncate">{book.title}</td>
-                          <td className="px-2 py-3 text-[11px] text-purple-600 font-semibold whitespace-nowrap text-right">
+                          <td className="px-2 py-3 text-[11px] text-purple-600 font-semibold whitespace-nowrap text-left">
                             {book.authors.length > 6 ? `${book.authors.slice(0, 6)}...` : book.authors}
                           </td>
                           <td className="px-2 py-3">
