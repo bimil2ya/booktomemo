@@ -67,7 +67,7 @@ const SUB_REGIONS: Record<string, { code: string; name: string }[]> = {
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'search' | 'library'>('search');
   const [libraryName, setLibraryName] = useState<string | null>(null);
-  const [nameInput, setNameInput] = useState('');
+  const [nameInput, setNameInput] = useState('경호');
   const [libraryHistory, setLibraryHistory] = useState<string[]>([]);
   
   // 도서관 설정 상태
@@ -75,7 +75,7 @@ export default function Home() {
   const [selectedSubRegion, setSelectedSubRegion] = useState('31130'); // 남양주 기본
   const [availableLibs, setAvailableLibs] = useState<LibraryInfo[]>([]);
   const [searchLibLoading, setSearchLibLoading] = useState(false);
-  const [myPrimaryLib, setMyPrimaryLib] = useState<{code: string, name: string} | null>(null);
+  const [myPrimaryLib, setMyPrimaryLib] = useState<{code: string, name: string} | null>({code: '131557', name: '남양주시 별빛도서관'});
 
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
@@ -100,7 +100,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const KAKAO_KEY = "75db26230fefcfdb7c8802f4f6913ec3";
-  const VERSION = "v1.6.1";
+  const VERSION = "v1.6.2";
 
   // 상세 모달 도서관 정보 상태
   const [availabilityStatus, setAvailabilityStatus] = useState<{
@@ -271,14 +271,13 @@ export default function Home() {
     setLibraryHistory(newHistory);
     
     setLibraryName(finalName);
-    setNameInput('');
   };
 
   const handleLogout = () => {
     if (confirm('서재에서 나가시겠습니까?')) {
       localStorage.removeItem('library_owner_name');
       setLibraryName(null);
-      setNameInput('');
+      // setNameInput('경호'); // Keep default
       setSavedBooks([]);
     }
   };
@@ -538,7 +537,7 @@ export default function Home() {
                         <div 
                           key={lib.libCode}
                           onClick={() => setMyPrimaryLib({code: lib.libCode, name: lib.libName})}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
                         >
                           <div className="text-[11px] font-bold truncate">{lib.libName}</div>
                           <div className={`text-[9px] mt-0.5 opacity-70 truncate ${myPrimaryLib?.code === lib.libCode ? 'text-white' : 'text-zinc-400'}`}>{lib.address}</div>
@@ -837,7 +836,7 @@ export default function Home() {
                             onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
                             className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
                           >
-                            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed italic">
                               {book.personal_memo || '남겨진 메모가 없습니다.'}
                             </p>
                           </div>
@@ -850,10 +849,10 @@ export default function Home() {
             ) : (
               <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse table-fixed">
                     <thead>
                       <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                        <th className="px-4 py-3 w-10 text-center">
+                        <th className="px-2 py-3 w-10 text-center">
                           <input 
                             type="checkbox" 
                             checked={selectedIds.length === savedBooks.length && savedBooks.length > 0}
@@ -861,15 +860,15 @@ export default function Home() {
                             className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
                           />
                         </th>
-                        <th onClick={() => toggleSort('title')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
-                        <th onClick={() => toggleSort('authors')} className="px-4 py-3 w-[70px] cursor-pointer hover:text-purple-600 transition-colors">저자</th>
-                        <th className="px-4 py-3 w-10"></th>
+                        <th onClick={() => toggleSort('title')} className="px-2 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
+                        <th onClick={() => toggleSort('authors')} className="px-2 py-3 w-[80px] text-right cursor-pointer hover:text-purple-600 transition-colors">저자</th>
+                        <th className="px-2 py-3 w-8"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {savedBooks.map((book) => (
                         <tr key={book.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors group">
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-2 py-3 text-center">
                             <input 
                               type="checkbox" 
                               checked={selectedIds.includes(book.id!)}
@@ -877,12 +876,12 @@ export default function Home() {
                               className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
                             />
                           </td>
-                          <td onClick={() => setSelectedBook(book)} className="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-zinc-50 cursor-pointer">{book.title}</td>
-                          <td className="px-4 py-3 text-xs text-purple-600 font-semibold whitespace-nowrap">
+                          <td onClick={() => setSelectedBook(book)} className="px-2 py-3 text-sm font-bold text-zinc-900 dark:text-zinc-50 cursor-pointer truncate">{book.title}</td>
+                          <td className="px-2 py-3 text-[11px] text-purple-600 font-semibold whitespace-nowrap text-right">
                             {book.authors.length > 6 ? `${book.authors.slice(0, 6)}...` : book.authors}
                           </td>
-                          <td className="px-4 py-3">
-                            <button onClick={() => deleteSavedBook(book.id!)} className="p-1.5 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                          <td className="px-2 py-3">
+                            <button onClick={() => deleteSavedBook(book.id!)} className="p-1 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </td>
