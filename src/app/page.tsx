@@ -1050,47 +1050,81 @@ export default function Home() {
               </div>
             ) : (
               <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse table-fixed">
-                    <thead>
-                      <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                        <th className="px-2 py-3 w-10 text-center">
+                {/* 리스트 헤더 */}
+                <div className="flex bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                  <div className="w-12 py-3 flex justify-center flex-none">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedIds.length === savedBooks.length && savedBooks.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div onClick={() => toggleSort('title')} className="flex-1 px-2 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</div>
+                  <div onClick={() => toggleSort('authors')} className="w-[80px] px-2 py-3 text-left cursor-pointer hover:text-purple-600 transition-colors flex-none">저자</div>
+                  <div className="w-8 flex-none"></div>
+                </div>
+
+                {/* 리스트 본문 */}
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {savedBooks.map((book) => (
+                    <div 
+                      key={book.id} 
+                      className="relative overflow-hidden group"
+                      onTouchStart={(e) => {
+                        touchStartX.current = e.touches[0].clientX;
+                      }}
+                      onTouchMove={(e) => {
+                        const touchX = e.touches[0].clientX;
+                        const diff = touchStartX.current - touchX;
+                        if (diff > 50) setSwipingId(book.id!);
+                        if (diff < -50) setSwipingId(null);
+                      }}
+                    >
+                      {/* 스와이프 시 나타나는 버튼들 */}
+                      <div className={`absolute inset-0 flex justify-end transition-opacity duration-300 ${swipingId === book.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <div className="flex w-1/2 h-full">
+                          <button 
+                            onClick={() => setSwipingId(null)}
+                            className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-xs"
+                          >
+                            취소
+                          </button>
+                          <button 
+                            onClick={() => { deleteSavedBook(book.id!); setSwipingId(null); }}
+                            className="flex-1 bg-red-500 text-white font-bold text-xs"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 리스트 행 내용 */}
+                      <div 
+                        className={`flex items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-all duration-300 cursor-pointer ${swipingId === book.id ? '-translate-x-1/2' : 'translate-x-0'}`}
+                      >
+                        <div className="w-12 py-4 flex justify-center flex-none" onClick={(e) => e.stopPropagation()}>
                           <input 
                             type="checkbox" 
-                            checked={selectedIds.length === savedBooks.length && savedBooks.length > 0}
-                            onChange={toggleSelectAll}
+                            checked={selectedIds.includes(book.id!)}
+                            onChange={() => toggleSelect(book.id!)}
                             className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
                           />
-                        </th>
-                        <th onClick={() => toggleSort('title')} className="px-2 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
-                        <th onClick={() => toggleSort('authors')} className="px-2 py-3 w-[80px] text-left cursor-pointer hover:text-purple-600 transition-colors">저자</th>
-                        <th className="px-2 py-3 w-8"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {savedBooks.map((book) => (
-                        <tr key={book.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors group">
-                          <td className="px-2 py-3 text-center">
-                            <input 
-                              type="checkbox" 
-                              checked={selectedIds.includes(book.id!)}
-                              onChange={() => toggleSelect(book.id!)}
-                              className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
-                            />
-                          </td>
-                          <td onClick={() => setSelectedBook(book)} className="px-2 py-3 text-sm font-bold text-zinc-900 dark:text-zinc-50 cursor-pointer truncate">{book.title}</td>
-                          <td className="px-2 py-3 text-[11px] text-purple-600 font-semibold whitespace-nowrap text-left">
-                            {book.authors.length > 6 ? `${book.authors.slice(0, 6)}...` : book.authors}
-                          </td>
-                          <td className="px-2 py-3">
-                            <button onClick={() => deleteSavedBook(book.id!)} className="p-1 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                        </div>
+                        <div onClick={() => swipingId !== book.id && setSelectedBook(book)} className="flex-1 px-2 py-4 text-sm font-bold text-zinc-900 dark:text-zinc-50 truncate">
+                          {book.title}
+                        </div>
+                        <div onClick={() => swipingId !== book.id && setSelectedBook(book)} className="w-[80px] px-2 py-4 text-[11px] text-purple-600 font-semibold truncate flex-none">
+                          {book.authors.length > 6 ? `${book.authors.slice(0, 6)}...` : book.authors}
+                        </div>
+                        <div className="w-8 py-4 flex-none">
+                          <button onClick={(e) => { e.stopPropagation(); deleteSavedBook(book.id!); }} className="p-1 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
