@@ -57,10 +57,14 @@ export async function saveBookAction(book: { isbn: string; title: string; author
   }
 }
 
-export async function updateBookAction(id: number, editData: Partial<{ title: string; authors: string; publisher: string; personal_memo: string }>) {
+export async function updateBookAction(id: number, editData: any) {
   try {
     const supabase = getSupabase();
-    const { error } = await supabase.from('books').update(editData).eq('id', id);
+    // id, created_at 등 시스템 컬럼이 업데이트에 포함되지 않도록 허용된 필드만 추출
+    const { title, authors, publisher, personal_memo } = editData;
+    const cleanData = { title, authors, publisher, personal_memo };
+
+    const { error } = await supabase.from('books').update(cleanData).eq('id', id);
     if (error) throw error;
     return { success: true };
   } catch (error: unknown) {
