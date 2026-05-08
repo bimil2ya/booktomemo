@@ -96,3 +96,15 @@ export async function deleteBookAction(id: number) {
     return { error: `[삭제실패] ${getErrorMessage(error)}` };
   }
 }
+
+export async function deleteBooksAction(ids: number[]) {
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase.from('books').delete().in('id', ids);
+    if (error) throw error;
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('deleteBooksAction Error:', error);
+    return { error: `[선택 삭제 실패] ${getErrorMessage(error)}` };
+  }
+}

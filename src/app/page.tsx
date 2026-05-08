@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X } from 'lucide-react';
+import { Camera, Search, Trash2, Edit2, Check, Smartphone, Database, Library, BookOpen, ChevronUp, ChevronDown, LogOut, X, List, LayoutGrid } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import axios from 'axios';
-import { getBooksAction, saveBookAction, updateBookAction, deleteBookAction } from './actions';
+import { getBooksAction, saveBookAction, updateBookAction, deleteBookAction, deleteBooksAction } from './actions';
 
 interface Book {
   title: string;
@@ -52,6 +52,8 @@ export default function Home() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   const [swipingId, setSwipingId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const touchStartX = useRef<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +80,11 @@ export default function Home() {
       searchBooks(q, false);
     }
   }, []);
+
+  // 탭 변경 시 선택 초기화
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [activeTab]);
 
   // 도서 목록 가져오기 (Supabase)
   const fetchSavedBooks = useCallback(async () => {
@@ -171,8 +178,9 @@ export default function Home() {
       } else {
         alert('이미지에서 책 정보를 찾지 못했습니다.');
       }
-    } catch {
-      alert('사진 인식 중 오류가 발생했습니다.');
+    } catch (error: unknown) {
+      console.error('OCR Error:', error);
+      alert('사진 인식 중 오류가 발생했습니다. 직접 검색을 이용해 주세요.');
     } finally {
       setOcrLoading(false);
     }
@@ -196,9 +204,7 @@ export default function Home() {
       const { error } = await saveBookAction(newBook);
 
       if (error === 'ALREADY_EXISTS') {
-        if (!confirm('이미 저장된 책입니다. 다시 저장할까요?')) {
-          return;
-        }
+        alert('이미 저장된 책입니다.');
         return;
       }
 
@@ -218,7 +224,7 @@ export default function Home() {
       if (error instanceof Error) {
         errorMsg = error.message;
       }
-      alert(`저장 실패: ${errorMsg}\n\n도움말: 네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.`);
+      alert(`저장 실패: ${errorMsg}\n\n네트워크 연결 상태를 확인하고 잠시 후 다시 시도해 주세요.`);
     } finally {
       setSavingIsbn(null);
     }
@@ -262,7 +268,41 @@ export default function Home() {
     try {
       const { error } = await deleteBookAction(id);
       if (error) throw new Error(error);
+      setSelectedIds(prev => prev.filter(item => item !== id));
       fetchSavedBooks();
+    } catch (error: unknown) {
+      let errorMsg = '알 수 없는 오류';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      }
+      alert('삭제 중 오류가 발생했습니다: ' + errorMsg);
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === savedBooks.length && savedBooks.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(savedBooks.map(book => book.id!));
+    }
+  };
+
+  const deleteSelectedBooks = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`선택한 ${selectedIds.length}권의 책을 삭제하시겠습니까?`)) return;
+    
+    try {
+      const { error } = await deleteBooksAction(selectedIds);
+      if (error) throw new Error(error);
+      setSelectedIds([]);
+      fetchSavedBooks();
+      alert('선택한 책들이 삭제되었습니다.');
     } catch (error: unknown) {
       let errorMsg = '알 수 없는 오류';
       if (error instanceof Error) {
@@ -393,6 +433,14 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+              {!loading && query && books.length === 0 && (
+                <div className="py-20 text-center space-y-4">
+                  <div className="w-20 h-20 bg-zinc-50 dark:bg-zinc-900 rounded-full flex items-center justify-center mx-auto">
+                    <Search className="w-10 h-10 text-zinc-200" />
+                  </div>
+                  <p className="text-zinc-400 text-sm">검색 결과가 없습니다.<br/>다른 키워드로 검색해보세요.</p>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -401,6 +449,31 @@ export default function Home() {
               <h2 className="text-3xl font-extrabold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
                 <Library className="w-8 h-8 text-purple-600" />내 보관함
               </h2>
+              <div className="flex items-center gap-2">
+                {savedBooks.length > 0 && (
+                  <button 
+                    onClick={toggleSelectAll}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${selectedIds.length === savedBooks.length ? 'bg-zinc-900 text-white' : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900'}`}
+                  >
+                    {selectedIds.length === savedBooks.length ? '전체 해제' : '전체 선택'}
+                  </button>
+                )}
+                {selectedIds.length > 0 && (
+                  <button 
+                    onClick={deleteSelectedBooks}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 rounded-xl text-xs font-bold transition-all hover:bg-red-100"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {selectedIds.length}개 삭제
+                  </button>
+                )}
+                <button 
+                  onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                  className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:text-purple-600 transition-all"
+                >
+                  {viewMode === 'grid' ? <List className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+                </button>
+              </div>
             </header>
             
             <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
@@ -418,115 +491,168 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {savedBooks.map((book) => (
-                <div 
-                  key={book.id} 
-                  className="relative overflow-hidden rounded-3xl group"
-                  onTouchStart={(e) => {
-                    touchStartX.current = e.touches[0].clientX;
-                  }}
-                  onTouchMove={(e) => {
-                    const touchX = e.touches[0].clientX;
-                    const diff = touchStartX.current - touchX;
-                    // 왼쪽으로 50px 이상 스와이프하면 삭제 모드
-                    if (diff > 50) setSwipingId(book.id!);
-                    // 오른쪽으로 50px 이상 스와이프하면 취소
-                    if (diff < -50) setSwipingId(null);
-                  }}
-                >
-                  {/* 스와이프 시 나타나는 배경 버튼들 */}
-                  <div className={`absolute inset-0 flex justify-end transition-opacity duration-300 ${swipingId === book.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                    <div className="flex flex-col w-1/2 h-full">
-                      <button 
-                        onClick={() => setSwipingId(null)}
-                        className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-sm border-b border-white/10"
-                      >
-                        취소
-                      </button>
-                      <button 
-                        onClick={() => { deleteSavedBook(book.id!); setSwipingId(null); }}
-                        className="flex-1 bg-red-500 text-white font-bold text-sm"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 메인 카드 콘텐츠 */}
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {savedBooks.map((book) => (
                   <div 
-                    onClick={() => swipingId !== book.id && editingId !== book.id && setSelectedBook(book)} 
-                    className={`bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300 cursor-pointer ${swipingId === book.id ? '-translate-x-1/2' : 'translate-x-0'}`}
+                    key={book.id} 
+                    className="relative overflow-hidden rounded-3xl group"
+                    onTouchStart={(e) => {
+                      touchStartX.current = e.touches[0].clientX;
+                    }}
+                    onTouchMove={(e) => {
+                      const touchX = e.touches[0].clientX;
+                      const diff = touchStartX.current - touchX;
+                      if (diff > 50) setSwipingId(book.id!);
+                      if (diff < -50) setSwipingId(null);
+                    }}
                   >
-                    <div className="p-4 flex gap-4">
-                      <img src={book.thumbnail || '/file.svg'} className="w-20 h-28 object-cover rounded-xl shadow-xs" alt={book.title} />
-                      <div className="flex-1 min-w-0 flex flex-col justify-between">
-                        <div className="space-y-1">
-                          {editingId === book.id ? (
-                            <input 
-                              value={editFormData.title || ''} 
-                              onChange={e => setEditFormData({...editFormData, title: e.target.value})} 
-                              className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-bold border-none focus:ring-1 focus:ring-purple-500"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          ) : (
-                            <h3 className="font-bold text-zinc-900 dark:text-zinc-50 text-sm line-clamp-2">{book.title}</h3>
-                          )}
-                          
-                          {editingId === book.id ? (
-                            <input 
-                              value={editFormData.authors || ''} 
-                              onChange={e => setEditFormData({...editFormData, authors: e.target.value})} 
-                              className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-xs border-none focus:ring-1 focus:ring-purple-500"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          ) : (
-                            <p className="text-purple-600 text-[11px] font-bold truncate">{book.authors}</p>
-                          )}
-                          
-                          <p className="text-zinc-400 text-[10px]">{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-1 mt-2">
-                          {editingId === book.id ? (
-                            <>
-                              <button onClick={(e) => { e.stopPropagation(); saveEdit(); }} className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"><Check className="w-4 h-4"/></button>
-                              <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl"><X className="w-4 h-4"/></button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }} className="p-2 text-zinc-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors"><Edit2 className="w-4 h-4"/></button>
-                              <button onClick={(e) => { e.stopPropagation(); deleteSavedBook(book.id!); }} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><Trash2 className="w-4 h-4"/></button>
-                            </>
-                          )}
-                        </div>
+                    <div className={`absolute inset-0 flex justify-end transition-opacity duration-300 ${swipingId === book.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                      <div className="flex flex-col w-1/2 h-full">
+                        <button 
+                          onClick={() => setSwipingId(null)}
+                          className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-sm border-b border-white/10"
+                        >
+                          취소
+                        </button>
+                        <button 
+                          onClick={() => { deleteSavedBook(book.id!); setSwipingId(null); }}
+                          className="flex-1 bg-red-500 text-white font-bold text-sm"
+                        >
+                          삭제
+                        </button>
                       </div>
                     </div>
 
-                    <div className="px-4 pb-4 mt-auto">
-                      {editingId === book.id ? (
-                        <textarea
-                          value={editFormData.personal_memo || ''}
-                          onChange={e => setEditFormData({...editFormData, personal_memo: e.target.value})}
-                          placeholder="개인 메모를 입력하세요..."
-                          className="w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <div 
-                          onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
-                          className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
-                        >
-                          <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
-                            {book.personal_memo || '남겨진 메모가 없습니다.'}
-                          </p>
+                    <div 
+                      onClick={() => swipingId !== book.id && editingId !== book.id && setSelectedBook(book)} 
+                      className={`bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300 cursor-pointer ${swipingId === book.id ? '-translate-x-1/2' : 'translate-x-0'}`}
+                    >
+                      <div className="p-4 flex gap-4 relative">
+                        <div className="relative flex-none">
+                          <img src={book.thumbnail || '/file.svg'} className="w-20 h-28 object-cover rounded-xl shadow-xs" alt={book.title} />
+                          <div className="absolute top-1 left-1 z-10">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(book.id!)}
+                              onChange={(e) => { e.stopPropagation(); toggleSelect(book.id!); }}
+                              className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500 bg-white/90 shadow-sm"
+                            />
+                          </div>
                         </div>
-                      )}
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div className="space-y-1">
+                            {editingId === book.id ? (
+                              <input 
+                                value={editFormData.title || ''} 
+                                onChange={e => setEditFormData({...editFormData, title: e.target.value})} 
+                                className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-bold border-none focus:ring-1 focus:ring-purple-500"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <h3 className="font-bold text-zinc-900 dark:text-zinc-50 text-sm line-clamp-2">{book.title}</h3>
+                            )}
+                            
+                            {editingId === book.id ? (
+                              <input 
+                                value={editFormData.authors || ''} 
+                                onChange={e => setEditFormData({...editFormData, authors: e.target.value})} 
+                                className="w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-xs border-none focus:ring-1 focus:ring-purple-500"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <p className="text-purple-600 text-[11px] font-bold truncate">{book.authors}</p>
+                            )}
+                            
+                            <p className="text-zinc-400 text-[10px]">{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-1 mt-2">
+                            {editingId === book.id ? (
+                              <>
+                                <button onClick={(e) => { e.stopPropagation(); saveEdit(); }} className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"><Check className="w-4 h-4"/></button>
+                                <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl"><X className="w-4 h-4"/></button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }} className="p-2 text-zinc-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors"><Edit2 className="w-4 h-4"/></button>
+                                <button onClick={(e) => { e.stopPropagation(); deleteSavedBook(book.id!); }} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><Trash2 className="w-4 h-4"/></button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="px-4 pb-4 mt-auto">
+                        {editingId === book.id ? (
+                          <textarea
+                            value={editFormData.personal_memo || ''}
+                            onChange={e => setEditFormData({...editFormData, personal_memo: e.target.value})}
+                            placeholder="개인 메모를 입력하세요..."
+                            className="w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <div 
+                            onClick={(e) => { e.stopPropagation(); setEditingId(book.id!); setEditFormData(book); }}
+                            className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo"
+                          >
+                            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic">
+                              {book.personal_memo || '남겨진 메모가 없습니다.'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                        <th className="px-4 py-3 w-10 text-center">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedIds.length === savedBooks.length && savedBooks.length > 0}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
+                          />
+                        </th>
+                        <th onClick={() => toggleSort('title')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">제목</th>
+                        <th onClick={() => toggleSort('authors')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">저자</th>
+                        <th onClick={() => toggleSort('publisher')} className="px-4 py-3 cursor-pointer hover:text-purple-600 transition-colors">출판사</th>
+                        <th className="px-4 py-3 w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {savedBooks.map((book) => (
+                        <tr key={book.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors group">
+                          <td className="px-4 py-3 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(book.id!)}
+                              onChange={() => toggleSelect(book.id!)}
+                              className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500"
+                            />
+                          </td>
+                          <td onClick={() => setSelectedBook(book)} className="px-4 py-3 text-sm font-bold text-zinc-900 dark:text-zinc-50 cursor-pointer">{book.title}</td>
+                          <td className="px-4 py-3 text-xs text-purple-600 font-semibold">{book.authors}</td>
+                          <td className="px-4 py-3 text-xs text-zinc-400">{book.publisher}</td>
+                          <td className="px-4 py-3">
+                            <button onClick={() => deleteSavedBook(book.id!)} className="p-1.5 text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
 
             {savedBooks.length === 0 && (
               <div className="py-20 text-center space-y-4">
@@ -552,7 +678,6 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* 도서 상세 모달 */}
       {selectedBook && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all" onClick={() => setSelectedBook(null)}>
           <div className="bg-white dark:bg-zinc-900 w-full max-w-lg max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
