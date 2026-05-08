@@ -214,11 +214,15 @@ export async function searchLibrariesAction(region: string, dtl_region: string) 
         dtl_region,
         format: 'json',
         pageSize: 100
-      }
+      },
+      timeout: 5000 // 5초 타임아웃 추가
     });
     return { data: response.data.response.libs || [] };
   } catch (error: any) {
     console.error('searchLibrariesAction Error:', error);
+    if (error.code === 'ECONNABORTED') {
+      return { error: '도서관 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.' };
+    }
     return { error: error.message || '도서관 목록을 가져오지 못했습니다.' };
   }
 }
@@ -231,11 +235,15 @@ export async function checkBookAvailabilityAction(isbn: string, libCode: string)
         libCode,
         isbn13: isbn,
         format: 'json'
-      }
+      },
+      timeout: 5000 // 5초 타임아웃 추가
     });
     return { data: response.data.response.result };
   } catch (error: any) {
     console.error('checkBookAvailabilityAction Error:', error);
+    if (error.code === 'ECONNABORTED') {
+      return { error: '도서 정보 서버 응답 시간이 초과되었습니다.' };
+    }
     return { error: error.message || '소장 여부 확인에 실패했습니다.' };
   }
 }
@@ -249,11 +257,15 @@ export async function searchLibrariesByBookAction(isbn: string, region: string, 
         region,
         dtl_region,
         format: 'json'
-      }
+      },
+      timeout: 5000 // 5초 타임아웃 추가
     });
     return { data: response.data.response.libs || [] };
   } catch (error: any) {
     console.error('searchLibrariesByBookAction Error:', error);
+    if (error.code === 'ECONNABORTED') {
+      return { error: '상호대차 조회 서버 응답 시간이 초과되었습니다.' };
+    }
     return { error: error.message || '상호대차 조회를 완료하지 못했습니다.' };
   }
 }
