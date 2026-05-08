@@ -139,6 +139,39 @@ export default function Home() {
   // 상세 모달 상태
   const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
 
+  // 책 이미지 컴포넌트 (로딩 및 폴백 처리)
+  const BookThumbnail = ({ src, title, className }: { src: string, title: string, className?: string }) => {
+    const [isImgError, setIsImgError] = useState(false);
+    const [isImgLoading, setIsImgLoading] = useState(true);
+
+    return (
+      <div className={`relative bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden ${className}`}>
+        {isImgLoading && !isImgError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 animate-pulse">
+            <BookOpen className="w-6 h-6 text-zinc-200" />
+          </div>
+        )}
+        {!src || isImgError ? (
+          <div className="flex flex-col items-center justify-center gap-1 p-2 text-center">
+            <BookOpen className="w-8 h-8 text-zinc-300 dark:text-zinc-700" />
+            <span className="text-[8px] text-zinc-400 font-medium line-clamp-2">{title}</span>
+          </div>
+        ) : (
+          <img 
+            src={src} 
+            alt={title}
+            className={`w-full h-full object-cover transition-opacity duration-300 ${isImgLoading ? 'opacity-0' : 'opacity-100'}`}
+            onLoad={() => setIsImgLoading(false)}
+            onError={() => {
+              setIsImgError(true);
+              setIsImgLoading(false);
+            }}
+          />
+        )}
+      </div>
+    );
+  };
+
   // 초기 마운트 시 설정 불러오기
   useEffect(() => {
     setIsMounted(true);
@@ -859,7 +892,7 @@ export default function Home() {
             <div className="grid gap-3">
               {books.map((book, idx) => (
                 <div key={idx} onClick={() => setSelectedBook(book)} className="flex gap-4 p-3 bg-white dark:bg-zinc-900 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 shadow-sm cursor-pointer hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
-                  <img src={book.thumbnail || '/file.svg'} className="w-16 h-24 object-cover rounded-xl shadow-xs flex-none" alt={book.title} />
+                  <BookThumbnail src={book.thumbnail} title={book.title} className="w-16 h-24 rounded-xl shadow-xs flex-none" />
                   <div className="flex-1 flex flex-col justify-center min-w-0">
                     <div className="space-y-0.5">
                       <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-50 truncate leading-tight">{book.title}</h3>
@@ -971,7 +1004,7 @@ export default function Home() {
                     >
                       <div className="p-4 flex gap-4 relative">
                         <div className="relative flex-none">
-                          <img src={book.thumbnail || '/file.svg'} className="w-20 h-28 object-cover rounded-xl shadow-xs" alt={book.title} />
+                          <BookThumbnail src={book.thumbnail} title={book.title} className="w-20 h-28 rounded-xl shadow-xs" />
                           <div className="absolute top-1 left-1 z-10">
                             <input 
                               type="checkbox" 
@@ -1157,17 +1190,15 @@ export default function Home() {
       {selectedBook && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all" onClick={() => setSelectedBook(null)}>
           <div className="bg-white dark:bg-zinc-900 w-full max-w-lg max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="relative h-48 sm:h-64 overflow-hidden bg-purple-50 dark:bg-purple-900/10">
-              <img 
-                src={selectedBook.thumbnail || '/file.svg'} 
-                className="w-full h-full object-contain p-8 scale-110 blur-xl opacity-20 absolute inset-0" 
-                alt=""
-              />
-              <img 
-                src={selectedBook.thumbnail || '/file.svg'} 
-                className="w-full h-full object-contain p-4 relative z-10 drop-shadow-xl" 
-                alt={selectedBook.title}
-              />
+            <div className="relative h-48 sm:h-64 overflow-hidden bg-purple-50 dark:bg-purple-900/10 flex items-center justify-center">
+              {selectedBook.thumbnail && (
+                <img 
+                  src={selectedBook.thumbnail} 
+                  className="w-full h-full object-contain p-8 scale-110 blur-xl opacity-20 absolute inset-0" 
+                  alt=""
+                />
+              )}
+              <BookThumbnail src={selectedBook.thumbnail} title={selectedBook.title} className="w-auto h-[80%] relative z-10 drop-shadow-xl bg-transparent dark:bg-transparent" />
               <button 
                 onClick={() => setSelectedBook(null)}
                 className="absolute top-6 right-6 p-2 bg-white/20 dark:bg-black/20 backdrop-blur-md rounded-full text-white hover:bg-white/40 transition-all z-20"
