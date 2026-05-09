@@ -13,16 +13,19 @@ interface BookDetailModalProps {
   onClose: () => void;
   myPrimaryLib: { code: string; name: string } | null;
   availabilityStatus: AvailabilityStatus | null;
+  onSave?: (book: Book) => void;
+  savingIsbn?: string | null;
 }
 
 const BookDetailModal: React.FC<BookDetailModalProps> = ({
-  book, onClose, myPrimaryLib, availabilityStatus
+  book, onClose, myPrimaryLib, availabilityStatus, onSave, savingIsbn
 }) => {
   const { libraryName, updateBookOptimistic } = useLibrary();
   const { showToast } = useToast();
   const [memo, setMemo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavedBook = 'id' in book;
+  const isCurrentlySaving = savingIsbn === book.isbn;
 
   useEffect(() => {
     if (isSavedBook) {
@@ -189,13 +192,22 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
           )}
         </div>
 
-        <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800">
+        <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800 flex gap-3">
           <button 
             onClick={onClose}
-            className="w-full py-4 bg-zinc-900 dark:bg-white dark:text-black text-white rounded-2xl font-bold text-lg hover:scale-[0.98] transition-all"
+            className="flex-1 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 rounded-2xl font-bold text-lg hover:scale-[0.98] transition-all"
           >
             닫기
           </button>
+          {!isSavedBook && onSave && (
+            <button 
+              onClick={() => onSave(book as Book)}
+              disabled={isCurrentlySaving}
+              className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg hover:bg-purple-700 hover:scale-[0.98] transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+            >
+              {isCurrentlySaving ? <Loader2 className="w-5 h-5 animate-spin" /> : '서재에 저장'}
+            </button>
+          )}
         </div>
       </div>
     </div>

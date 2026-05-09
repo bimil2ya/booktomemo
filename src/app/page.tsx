@@ -481,6 +481,8 @@ export default function Home() {
           onClose={() => { setSelectedBook(null); setSelectedBookId(null); }}
           myPrimaryLib={myPrimaryLib}
           availabilityStatus={availabilityStatus}
+          onSave={handleSave}
+          savingIsbn={savingIsbn}
         />
       )}
     </div>
