@@ -10,10 +10,11 @@ interface SearchResultCardProps {
   onSave: (book: Book) => void;
   savingIsbn: string | null;
   saveMode: 'shortcut' | 'native';
+  onAuthorClick?: (author: string) => void;
 }
 
 const SearchResultCard: React.FC<SearchResultCardProps> = ({
-  book, onSelect, onSave, savingIsbn, saveMode
+  book, onSelect, onSave, savingIsbn, saveMode, onAuthorClick
 }) => {
   return (
     <div 
@@ -24,7 +25,17 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({
       <div className="flex-1 min-w-0 flex flex-col justify-center overflow-hidden">
         <div className="space-y-0.5 min-w-0">
           <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-50 truncate leading-tight">{book.title}</h3>
-          <p className="text-purple-600 text-[11px] font-bold truncate">{book.authors.join(', ')}</p>
+          <div className="flex flex-wrap gap-x-1">
+            {book.authors.map((author, idx) => (
+              <span 
+                key={idx}
+                onClick={(e) => { e.stopPropagation(); onAuthorClick?.(author); }}
+                className="text-purple-600 text-[11px] font-bold hover:underline cursor-pointer"
+              >
+                {author}{idx < book.authors.length - 1 ? ',' : ''}
+              </span>
+            ))}
+          </div>
           <p className="text-zinc-400 text-[9px] truncate">{book.publisher}</p>
           <p className="text-zinc-500 text-[11px] line-clamp-1 leading-relaxed break-all">{book.contents}</p>
         </div>

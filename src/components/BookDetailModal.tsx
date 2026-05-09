@@ -15,10 +15,11 @@ interface BookDetailModalProps {
   availabilityStatus: AvailabilityStatus | null;
   onSave?: (book: Book) => void;
   savingIsbn?: string | null;
+  onAuthorClick?: (author: string) => void;
 }
 
 const BookDetailModal: React.FC<BookDetailModalProps> = ({
-  book, onClose, myPrimaryLib, availabilityStatus, onSave, savingIsbn
+  book, onClose, myPrimaryLib, availabilityStatus, onSave, savingIsbn, onAuthorClick
 }) => {
   const { libraryName, updateBookOptimistic } = useLibrary();
   const { showToast } = useToast();
@@ -92,9 +93,17 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
               {book.title}
             </h2>
             <div className="flex flex-wrap justify-center gap-2 text-sm">
-              <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold">
-                {Array.isArray(book.authors) ? book.authors.join(', ') : book.authors}
-              </span>
+              <div className="flex flex-wrap gap-2">
+                {(Array.isArray(book.authors) ? book.authors : [book.authors]).map((author, idx) => (
+                  <button 
+                    key={idx}
+                    onClick={() => onAuthorClick?.(author as string)}
+                    className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+                  >
+                    {author}
+                  </button>
+                ))}
+              </div>
               <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-full">
                 {book.publisher}
               </span>
