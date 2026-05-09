@@ -66,7 +66,6 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
     }
   };
 
-  // 저자 리스트 파싱 및 링크 렌더링
   const renderAuthors = () => {
     const authorsStr = book.authors || '';
     const authors = authorsStr.split(',').map(a => a.trim()).filter(Boolean);
@@ -87,7 +86,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
 
   return (
     <div 
-      className={'relative overflow-hidden ' + (isGrid ? 'group' : 'border-b border-zinc-100 dark:border-zinc-800/50')}
+      className={'relative overflow-hidden transition-all duration-300 ' + (isGrid ? 'mb-0' : 'mb-3')}
       onTouchStart={(e) => {
         touchStartX.current = e.touches[0].clientX;
       }}
@@ -108,9 +107,9 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
 
       <div 
         onClick={() => !isSwiping && !isEditing && onSelect()} 
-        className={'flex flex-col transition-transform duration-300 cursor-pointer overflow-hidden h-full ' + (isSwiping ? '-translate-x-1/2' : 'translate-x-0') + ' ' + (isGrid ? 'bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm rounded-3xl' : 'bg-transparent')}
+        className={'flex flex-col transition-transform duration-300 cursor-pointer overflow-hidden h-full ' + (isSwiping ? '-translate-x-1/2' : 'translate-x-0') + ' ' + (isGrid ? 'bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm rounded-3xl' : 'bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-zinc-100/50 dark:border-zinc-800/30')}
       >
-        <div className={'flex gap-4 relative ' + (isGrid ? 'p-4' : 'py-5 px-1')}>
+        <div className={'flex gap-4 relative ' + (isGrid ? 'p-4' : 'py-4 px-5')}>
           {/* 그리드형에서만 표지 노출 */}
           {isGrid && (
             <div className='relative flex-none'>
@@ -119,24 +118,24 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
           )}
           
           <div className='flex-1 min-w-0 flex flex-col justify-between overflow-hidden'>
-            <div className='space-y-1 min-w-0'>
+            <div className='space-y-1.5 min-w-0'>
               <div className='flex items-start justify-between gap-3'>
                 <div className='flex-1 min-w-0'>
                   {isEditing ? (
                     <input value={editFormData.title || ''} onChange={e => setEditFormData({...editFormData, title: e.target.value})} className='w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-bold border-none focus:ring-1 focus:ring-purple-500' onClick={(e) => e.stopPropagation()} />
                   ) : (
-                    <h3 className={'font-bold text-zinc-900 dark:text-zinc-50 break-all leading-tight ' + (isGrid ? 'text-sm line-clamp-2' : 'text-lg truncate')}>{book.title}</h3>
+                    <h3 className={'font-bold text-zinc-900 dark:text-zinc-50 break-all leading-tight ' + (isGrid ? 'text-sm line-clamp-2' : 'text-base truncate')}>{book.title}</h3>
                   )}
                 </div>
                 
                 {/* 상단 액션 버튼 배치 */}
-                <div className='flex items-center gap-3 flex-none pt-1'>
+                <div className='flex items-center gap-3 flex-none pt-0.5'>
                   {!isEditing && (
-                    <button onClick={(e) => { e.stopPropagation(); onDelete(book.id!); }} className='text-zinc-300 dark:text-zinc-700 hover:text-red-500 transition-colors'>
-                      <Trash2 className='w-4 h-4'/>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(book.id!); }} className='text-zinc-300 dark:text-zinc-600 hover:text-red-500 transition-colors'>
+                      <Trash2 className='w-4.5 h-4.5'/>
                     </button>
                   )}
-                  <input type='checkbox' checked={isSelected} onClick={(e) => e.stopPropagation()} onChange={() => { onToggleSelect(book.id!); }} className='w-5 h-5 rounded-lg border-zinc-300 text-purple-600 focus:ring-purple-500 bg-white dark:bg-zinc-800 transition-colors cursor-pointer' />
+                  <input type='checkbox' checked={isSelected} onClick={(e) => e.stopPropagation()} onChange={() => { onToggleSelect(book.id!); }} className='w-5 h-5 rounded-lg border-zinc-300 text-purple-600 focus:ring-purple-500 bg-white dark:bg-zinc-700 transition-colors cursor-pointer shadow-xs' />
                 </div>
               </div>
 

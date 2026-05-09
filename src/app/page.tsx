@@ -80,7 +80,7 @@ export default function Home() {
     return selectedBook;
   }, [selectedBookId, savedBooks, selectedBook]);
 
-  const VERSION = "v2.0.8"; 
+  const VERSION = "v2.0.9"; 
 
   const searchBooks = useCallback(async (searchQuery: string, updateUrl = true) => {
     if (!searchQuery || searchQuery.trim() === '[') return;
@@ -370,7 +370,7 @@ export default function Home() {
                 {[...Array(6)].map((_, i) => <BookCardSkeleton key={i} />)}
               </div>
             ) : (
-              <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800"}>
+              <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
                 {savedBooks.map((book) => (
                   <LibraryBookCard 
                     key={book.id} book={book} onSelect={() => { setSelectedBook(book); setSelectedBookId(book.id || null); }}
