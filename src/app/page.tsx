@@ -84,7 +84,7 @@ export default function Home() {
     return selectedBook;
   }, [selectedBookId, savedBooks, selectedBook]);
 
-  const VERSION = "v2.0.6"; 
+  const VERSION = "v2.0.7"; 
 
   /** 
    * 데이터 로딩 함수

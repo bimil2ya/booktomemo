@@ -63,6 +63,8 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
     }
   };
 
+  const isGrid = viewMode === 'grid';
+
   return (
     <div 
       className='relative overflow-hidden group'
@@ -85,12 +87,16 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
 
       <div 
         onClick={() => !isSwiping && !isEditing && onSelect()} 
-        className={'flex flex-col transition-transform duration-300 cursor-pointer overflow-hidden h-full ' + (isSwiping ? '-translate-x-1/2' : 'translate-x-0') + ' ' + (viewMode === 'grid' ? 'bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm rounded-3xl' : 'bg-transparent border-none shadow-none')}
+        className={'flex flex-col transition-transform duration-300 cursor-pointer overflow-hidden h-full ' + (isSwiping ? '-translate-x-1/2' : 'translate-x-0') + ' ' + (isGrid ? 'bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm rounded-3xl' : 'bg-transparent border-none shadow-none')}
       >
-        <div className={'flex gap-4 relative ' + (viewMode === 'grid' ? 'p-4' : 'py-3 px-1')}>
-          <div className='relative flex-none'>
-            <BookThumbnail src={book.thumbnail} title={book.title} className='w-20 h-28 rounded-xl shadow-xs' />
-          </div>
+        <div className={'flex gap-4 relative ' + (isGrid ? 'p-4' : 'py-3 px-1')}>
+          {/* 목록형에서는 표지를 숨김 */}
+          {isGrid && (
+            <div className='relative flex-none'>
+              <BookThumbnail src={book.thumbnail} title={book.title} className='w-20 h-28 rounded-xl shadow-xs' />
+            </div>
+          )}
+          
           <div className='flex-1 min-w-0 flex flex-col justify-between overflow-hidden'>
             <div className='space-y-1 min-w-0'>
               <div className='flex items-start justify-between gap-2'>
@@ -98,11 +104,11 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
                   {isEditing ? (
                     <input value={editFormData.title || ''} onChange={e => setEditFormData({...editFormData, title: e.target.value})} className='w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-bold border-none focus:ring-1 focus:ring-purple-500' onClick={(e) => e.stopPropagation()} />
                   ) : (
-                    <h3 className='font-bold text-zinc-900 dark:text-zinc-50 text-sm line-clamp-2 break-all leading-tight'>{book.title}</h3>
+                    <h3 className={'font-bold text-zinc-900 dark:text-zinc-50 break-all leading-tight ' + (isGrid ? 'text-sm line-clamp-2' : 'text-base truncate')}>{book.title}</h3>
                   )}
                 </div>
                 <div className='flex-none pt-0.5'>
-                  <input type='checkbox' checked={isSelected} onClick={(e) => e.stopPropagation()} onChange={() => { onToggleSelect(book.id!); }} className='w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500 bg-white dark:bg-zinc-800 transition-colors' />
+                  <input type='checkbox' checked={isSelected} onClick={(e) => e.stopPropagation()} onChange={() => { onToggleSelect(book.id!); }} className='w-5 h-5 rounded-lg border-zinc-300 text-purple-600 focus:ring-purple-500 bg-white dark:bg-zinc-800 transition-colors cursor-pointer' />
                 </div>
               </div>
               <div className='flex items-center gap-2 flex-wrap'>
@@ -111,10 +117,12 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
                   ) : (
                     <p className='text-purple-600 text-[11px] font-bold truncate'>{book.authors}</p>
                   )}
+                  <span className='text-zinc-300 dark:text-zinc-700'>·</span>
+                  <p className='text-zinc-400 text-[10px] truncate'>{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
                 </div>
-              <p className='text-zinc-400 text-[10px]'>{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
             </div>
-            <div className='flex items-center justify-end gap-1 mt-2'>
+            
+            <div className={'flex items-center justify-end gap-1 ' + (isGrid ? 'mt-2' : 'mt-1')}>
               {isEditing ? (
                 <><button onClick={handleSaveEdit} className='p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors'><Check className='w-4 h-4'/></button><button onClick={(e) => { e.stopPropagation(); setIsEditing(false); }} className='p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl'><X className='w-4 h-4'/></button></>
               ) : (
@@ -123,15 +131,19 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
             </div>
           </div>
         </div>
-        <div className={'mt-auto ' + (viewMode === 'grid' ? 'px-4 pb-4' : 'px-1 pb-2')}>
-          {isEditing ? (
-            <textarea value={editFormData.personal_memo || ''} onChange={e => setEditFormData({...editFormData, personal_memo: e.target.value})} placeholder='개인 메모를 입력하세요...' className='w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none' onClick={(e) => e.stopPropagation()} />
-          ) : (
-            <div onClick={handleStartEdit} className='p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo'>
-              <p className='text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic break-all'>{book.personal_memo || '남겨진 메모가 없습니다.'}</p>
-            </div>
-          )}
-        </div>
+
+        {/* 목록형에서는 메모 칸을 숨김 */}
+        {isGrid && (
+          <div className='mt-auto px-4 pb-4'>
+            {isEditing ? (
+              <textarea value={editFormData.personal_memo || ''} onChange={e => setEditFormData({...editFormData, personal_memo: e.target.value})} placeholder='개인 메모를 입력하세요...' className='w-full h-24 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl text-sm border-none focus:ring-1 focus:ring-purple-500 resize-none' onClick={(e) => e.stopPropagation()} />
+            ) : (
+              <div onClick={handleStartEdit} className='p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl min-h-[60px] cursor-text hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors group/memo'>
+                <p className='text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed italic break-all'>{book.personal_memo || '남겨진 메모가 없습니다.'}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
