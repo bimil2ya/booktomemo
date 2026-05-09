@@ -2,270 +2,229 @@
 
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
+import { cookies } from 'next/headers';
+import Anthropic from '@anthropic-ai/sdk';
 
-// 오타 수정: jmfgxmpgedcxyvaclci -> jmfgxmpgpedcxyvaclci ('p' 추가)
-const SUPABASE_URL = 'https://jmfgxmpgpedcxyvaclci.supabase.co'.trim();
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptZmd4bXBncGVkY3h5dmFjbGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTMxOTIsImV4cCI6MjA5MzY2OTE5Mn0.DYfK9_Ei844hRGub0xKwGQr9XjmKswYqpQDc6zKMwBg'.trim();
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const LIBRARY_API_KEY = process.env.LIBRARY_API_KEY || '';
+const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || '';
+const ADMIN_MASTER_CODE = process.env.ADMIN_MASTER_CODE || '8633';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
-const LIBRARY_API_KEY = '985f849582e606d981778d87739821f68b14a8533c5296363a38c948dc988ced';
+const anthropic = new Anthropic({
+  apiKey: ANTHROPIC_API_KEY,
+});
 
 function getSupabase() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-/**
- * 에러 메시지를 사용자 친화적으로 변환
- */
-function handleSupabaseError(error: any, context: string) {
-  console.error(`${context} Error:`, error);
-  
-  if (!error) return `[${context}] 알 수 없는 오류가 발생했습니다.`;
-
-  // Supabase/PostgREST 에러 코드 처리
-  if (error.code === 'PGRST204' || error.message?.includes('relation') && error.message?.includes('does not exist')) {
-    return `[데이터베이스 설정 오류] '${error.hint || '테이블'}'이(가) 존재하지 않습니다. 관리자에게 문의하세요.`;
-  }
-  
-  if (error.code === 'PGRST116') {
-    return `[조회 오류] 데이터를 찾을 수 없습니다.`;
-  }
-
-  if (error.message === 'FetchError' || error.code === 'ECONNREFUSED') {
-    return `[네트워크 오류] 서버와 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.`;
-  }
-
-  const msg = error.message || String(error);
-  return `[${context} 실패] ${msg}`;
+async function verifySession(ownerName: string, allowGuest: boolean = false) {
+  if (allowGuest && ownerName === 'guest') return;
+  const cookieStore = await cookies();
+  const sessionName = cookieStore.get('library_owner_name')?.value;
+  if (!sessionName) throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+  if (sessionName !== ownerName) throw new Error('인증 세션 정보가 일치하지 않습니다.');
 }
 
-/**
- * 서재 관련 액션 (비밀번호 보안)
- */
+function handleSupabaseError(error: unknown, context: string) {
+  console.error(context + ' Error:', error);
+  if (!error) return '[' + context + '] 알 수 없는 오류가 발생했습니다.';
+  const err = error as { code?: string; message?: string; hint?: string };
+  if (err.code === 'PGRST204') return '[DB 설정 오류] 테이블이 존재하지 않습니다.';
+  return '[' + context + ' 실패] ' + (err.message || String(err));
+}
+
+export async function analyzeImageAction(base64Image: string, contentType: string, owner_name: string) {
+  try {
+    await verifySession(owner_name);
+    if (!ANTHROPIC_API_KEY) return { data: null, error: 'API 키 누락' };
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-latest',
+      max_tokens: 100,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: contentType as 'image/jpeg', data: base64Image } },
+          { type: 'text', text: '이 이미지에서 책 제목과 저자 이름을 추출해줘. 제목: [제목], 저자: [저자] 형식으로만 답해줘.' }
+        ]
+      }]
+    });
+    const content = response.content[0];
+    if (content.type === 'text') {
+      const text = content.text;
+      const title = text.match(/제목:\s*(.+?)(?:,|$)/)?.[1]?.trim() || '';
+      const author = text.match(/저자:\s*(.+?)(?:,|$)/)?.[1]?.trim() || '';
+      return { data: { title, author }, error: null };
+    }
+    return { data: null, error: '텍스트 추출 실패' };
+  } catch (e: unknown) {
+    return { data: null, error: (e as Error).message };
+  }
+}
+
+export async function setLibraryCookieAction(name: string) {
+  const cookieStore = await cookies();
+  cookieStore.set('library_owner_name', name, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 2592000, path: '/' });
+}
+
+export async function clearLibraryCookieAction() {
+  (await cookies()).delete('library_owner_name');
+}
 
 export async function checkLibraryExistsAction(ownerName: string) {
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('libraries')
-      .select('owner_name')
-      .eq('owner_name', ownerName)
-      .maybeSingle();
-
+    const { data, error } = await getSupabase().from('libraries').select('owner_name').eq('owner_name', ownerName).maybeSingle();
     if (error) throw error;
-    return { exists: !!data };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '서재 확인') };
+    return { exists: !!data, error: null };
+  } catch (e) {
+    return { exists: false, error: handleSupabaseError(e, '확인') };
   }
 }
 
 export async function createLibraryAction(ownerName: string, password: string) {
   try {
-    const supabase = getSupabase();
-    const { error } = await supabase
-      .from('libraries')
-      .insert([{ owner_name: ownerName, password }]);
-
+    const { error } = await getSupabase().from('libraries').insert([{ owner_name: ownerName, password }]);
     if (error) throw error;
-    return { success: true };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '서재 생성') };
+    return { success: true, error: null };
+  } catch (e) {
+    return { success: false, error: handleSupabaseError(e, '생성') };
   }
 }
 
 export async function verifyLibraryPasswordAction(ownerName: string, password: string) {
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('libraries')
-      .select('password')
-      .eq('owner_name', ownerName)
-      .single();
-
+    const { data, error } = await getSupabase().from('libraries').select('password').eq('owner_name', ownerName).single();
     if (error) throw error;
-    if (data.password === password) {
-      return { success: true };
-    } else {
-      return { error: 'PASSWORD_INCORRECT' };
-    }
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '인증') };
+    return data.password === password ? { success: true, error: null } : { success: false, error: 'PASSWORD_INCORRECT' };
+  } catch (e) {
+    return { success: false, error: handleSupabaseError(e, '인증') };
   }
 }
 
 export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, masterCode: string) {
-  if (masterCode !== '8633') {
-    return { error: 'MASTER_CODE_INCORRECT' };
-  }
-
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('libraries')
-      .select('password')
-      .eq('owner_name', ownerName)
-      .single();
-
+    if (masterCode !== ADMIN_MASTER_CODE) return { password: null, error: 'MASTER_CODE_INCORRECT' };
+    const { data, error } = await getSupabase().from('libraries').select('password').eq('owner_name', ownerName).single();
     if (error) throw error;
-    return { password: data.password };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '비밀번호 조회') };
+    return { password: data.password, error: null };
+  } catch (e) {
+    return { password: null, error: handleSupabaseError(e, '조회') };
   }
 }
 
-/**
- * 도서 관련 액션
- */
-
-export async function getBooksAction(owner_name: string, sortColumn: string, sortOrder: string) {
+export async function searchBooksAction(query: string, owner_name: string, page: number = 1, size: number = 20) {
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('books')
-      .select('*')
-      .eq('owner_name', owner_name)
-      .order(sortColumn, { ascending: sortOrder === 'asc' });
-
-    if (error) throw error;
-    return { data };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '도서 조회') };
+    await verifySession(owner_name, true);
+    if (!KAKAO_REST_API_KEY) return { data: null, error: 'API 키 누락' };
+    const res = await axios.get('https://dapi.kakao.com/v3/search/book', {
+      params: { query, page, size },
+      headers: { Authorization: 'KakaoAK ' + KAKAO_REST_API_KEY },
+      timeout: 5000
+    });
+    return { data: res.data.documents || [], meta: res.data.meta, error: null };
+  } catch (e: unknown) {
+    return { data: null, error: (e as Error).message || '검색 실패' };
   }
 }
 
-export async function saveBookAction(book: { isbn: string; title: string; authors: string; thumbnail: string; contents: string; publisher: string; owner_name: string }) {
+export async function getBooksAction(owner_name: string, sortColumn: string, sortOrder: string, page: number = 1, size: number = 20) {
   try {
-    const supabase = getSupabase();
-    // 중복 체크
-    const { data: existing, error: checkError } = await supabase
-      .from('books')
-      .select('id')
-      .eq('owner_name', book.owner_name)
-      .eq('isbn', book.isbn);
-    
+    await verifySession(owner_name);
+    const from = (page - 1) * size;
+    const to = from + size - 1;
+    const { data, error, count } = await getSupabase().from('books').select('*', { count: 'exact' }).eq('owner_name', owner_name).order(sortColumn, { ascending: sortOrder === 'asc' }).range(from, to);
+    if (error) throw error;
+    return { data, totalCount: count || 0, error: null };
+  } catch (e) {
+    return { data: null, error: handleSupabaseError(e, '조회') };
+  }
+}
+
+export async function saveBookAction(book: { owner_name: string; isbn: string; title: string; authors: string; thumbnail: string; contents: string; publisher: string }) {
+  try {
+    await verifySession(book.owner_name);
+    const { data, error: checkError } = await getSupabase().from('books').select('id').eq('owner_name', book.owner_name).eq('isbn', book.isbn).maybeSingle();
     if (checkError) throw checkError;
-    if (existing && existing.length > 0) {
-      return { error: 'ALREADY_EXISTS' };
-    }
-
-    const { error } = await supabase.from('books').insert([book]);
+    if (data) return { success: false, error: 'ALREADY_EXISTS' };
+    const { error } = await getSupabase().from('books').insert([book]);
     if (error) throw error;
-    return { success: true };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '도서 저장') };
+    return { success: true, error: null };
+  } catch (e) {
+    return { success: false, error: handleSupabaseError(e, '저장') };
   }
 }
 
-export interface UpdateBookData {
-  title?: string;
-  authors?: string;
-  publisher?: string;
-  personal_memo?: string;
-}
-
-export async function updateBookAction(id: number, editData: UpdateBookData) {
+export async function updateBookAction(id: number, editData: { title?: string; authors?: string; publisher?: string; personal_memo?: string }, owner_name: string) {
   try {
-    const supabase = getSupabase();
-    const cleanData: UpdateBookData = {};
-    
-    if (editData.title !== undefined) cleanData.title = editData.title;
-    if (editData.authors !== undefined) cleanData.authors = editData.authors;
-    if (editData.publisher !== undefined) cleanData.publisher = editData.publisher;
-    if (editData.personal_memo !== undefined) cleanData.personal_memo = editData.personal_memo;
-
-    const { error } = await supabase.from('books').update(cleanData).eq('id', id);
+    await verifySession(owner_name);
+    const { error } = await getSupabase().from('books').update(editData).eq('id', id).eq('owner_name', owner_name);
     if (error) throw error;
-    return { success: true };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '도서 수정') };
+    return { success: true, error: null };
+  } catch (e) {
+    return { success: false, error: handleSupabaseError(e, '수정') };
   }
 }
 
-export async function deleteBookAction(id: number) {
+export async function deleteBookAction(id: number, owner_name: string) {
   try {
-    const supabase = getSupabase();
-    const { error } = await supabase.from('books').delete().eq('id', id);
+    await verifySession(owner_name);
+    const { error } = await getSupabase().from('books').delete().eq('id', id).eq('owner_name', owner_name);
     if (error) throw error;
-    return { success: true };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '도서 삭제') };
+    return { success: true, error: null };
+  } catch (e) {
+    return { success: false, error: handleSupabaseError(e, '삭제') };
   }
 }
 
-export async function deleteBooksAction(ids: number[]) {
+export async function deleteBooksAction(ids: number[], owner_name: string) {
   try {
-    const supabase = getSupabase();
-    const { error } = await supabase.from('books').delete().in('id', ids);
+    await verifySession(owner_name);
+    const { error } = await getSupabase().from('books').delete().in('id', ids).eq('owner_name', owner_name);
     if (error) throw error;
-    return { success: true };
-  } catch (error: unknown) {
-    return { error: handleSupabaseError(error, '선택 삭제') };
+    return { success: true, error: null };
+  } catch (e) {
+    return { success: false, error: handleSupabaseError(e, '선택삭제') };
   }
 }
 
-/**
- * 도서관 정보나루 API 관련은 Axios를 사용하므로 별도 처리
- */
-export async function searchLibrariesAction(region: string, dtl_region: string) {
+export async function searchLibrariesAction(region: string, dtl_region: string, owner_name: string) {
   try {
-    const response = await axios.get('http://data4library.kr/api/libSrch', {
-      params: {
-        authKey: LIBRARY_API_KEY,
-        region,
-        dtl_region,
-        format: 'json',
-        pageSize: 100
-      },
-      timeout: 5000 // 5초 타임아웃 추가
+    await verifySession(owner_name, true);
+    if (!LIBRARY_API_KEY) return { data: null, error: 'API 키 누락' };
+    const res = await axios.get('http://data4library.kr/api/libSrch', {
+      params: { authKey: LIBRARY_API_KEY, format: 'json', pageSize: 100, region, ...(dtl_region ? { dtl_region } : {}) },
+      timeout: 5000
     });
-    return { data: response.data.response.libs || [] };
-  } catch (error: any) {
-    console.error('searchLibrariesAction Error:', error);
-    if (error.code === 'ECONNABORTED') {
-      return { error: '도서관 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.' };
-    }
-    return { error: error.message || '도서관 목록을 가져오지 못했습니다.' };
+    return { data: res.data?.response?.libs || [], error: null };
+  } catch {
+    return { data: null, error: '조회 실패' };
   }
 }
 
-export async function checkBookAvailabilityAction(isbn: string, libCode: string) {
+export async function checkBookAvailabilityAction(isbn: string, libCode: string, owner_name: string) {
   try {
-    const response = await axios.get('http://data4library.kr/api/bookExist', {
-      params: {
-        authKey: LIBRARY_API_KEY,
-        libCode,
-        isbn13: isbn,
-        format: 'json'
-      },
-      timeout: 5000 // 5초 타임아웃 추가
+    await verifySession(owner_name, true);
+    const res = await axios.get('http://data4library.kr/api/bookExist', {
+      params: { authKey: LIBRARY_API_KEY, libCode, isbn13: isbn, format: 'json' },
+      timeout: 5000
     });
-    return { data: response.data.response.result };
-  } catch (error: any) {
-    console.error('checkBookAvailabilityAction Error:', error);
-    if (error.code === 'ECONNABORTED') {
-      return { error: '도서 정보 서버 응답 시간이 초과되었습니다.' };
-    }
-    return { error: error.message || '소장 여부 확인에 실패했습니다.' };
+    return { data: res.data?.response?.result || { hasBook: 'N' }, error: null };
+  } catch {
+    return { data: null, error: '실패' };
   }
 }
 
-export async function searchLibrariesByBookAction(isbn: string, region: string, dtl_region: string) {
+export async function searchLibrariesByBookAction(isbn: string, region: string, dtl_region: string, owner_name: string) {
   try {
-    const response = await axios.get('http://data4library.kr/api/libSrchByBook', {
-      params: {
-        authKey: LIBRARY_API_KEY,
-        isbn,
-        region,
-        dtl_region,
-        format: 'json'
-      },
-      timeout: 5000 // 5초 타임아웃 추가
+    await verifySession(owner_name, true);
+    const res = await axios.get('http://data4library.kr/api/libSrchByBook', {
+      params: { authKey: LIBRARY_API_KEY, isbn, region, dtl_region, format: 'json' },
+      timeout: 5000
     });
-    return { data: response.data.response.libs || [] };
-  } catch (error: any) {
-    console.error('searchLibrariesByBookAction Error:', error);
-    if (error.code === 'ECONNABORTED') {
-      return { error: '상호대차 조회 서버 응답 시간이 초과되었습니다.' };
-    }
-    return { error: error.message || '상호대차 조회를 완료하지 못했습니다.' };
+    return { data: res.data?.response?.libs || [], error: null };
+  } catch {
+    return { data: null, error: '실패' };
   }
 }
