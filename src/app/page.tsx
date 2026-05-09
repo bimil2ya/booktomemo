@@ -377,9 +377,9 @@ export default function Home() {
         }}
       />
 
-      <main className="max-w-4xl mx-auto px-4">
+      <main className="max-w-4xl mx-auto">
         {activeTab === 'search' ? (
-          <div className="space-y-8">
+          <div className="space-y-8 px-4">
             <BookSearchBar 
               query={query} setQuery={setQuery} 
               onSearch={(e) => { e.preventDefault(); searchBooks(query); }}
@@ -419,7 +419,7 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <section className="space-y-6">
+          <section className="space-y-6 px-4">
             <LibrarySortFilters 
               savedBooksCount={savedBooks.length}
               selectedIdsCount={selectedIds.length}
@@ -441,7 +441,7 @@ export default function Home() {
                 {[...Array(6)].map((_, i) => <BookCardSkeleton key={i} />)}
               </div>
             ) : (
-              <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800"}>
+              <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm divide-y divide-zinc-100 dark:divide-zinc-800"}>
                 {savedBooks.map((book) => (
                   <LibraryBookCard 
                     key={book.id} book={book}
@@ -451,6 +451,7 @@ export default function Home() {
                     onToggleSelect={(id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])}
                     swipingId={swipingId} setSwipingId={setSwipingId}
                     touchStartX={touchStartX}
+                  viewMode={viewMode}
                   />
                 ))}
               </div>
