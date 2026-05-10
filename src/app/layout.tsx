@@ -18,9 +18,7 @@ const geistMono = Geist_Mono({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: "#f9fafb",
+  maximumScale: 3, // 과도한 확대 방지를 위해 적절한 제한 유지
 };
 
 export const metadata: Metadata = {

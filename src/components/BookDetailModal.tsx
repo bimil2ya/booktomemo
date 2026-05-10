@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Book, SavedBook, AvailabilityStatus } from '@/types';
+import { Book, SavedBook, AvailabilityStatus, LibraryInfo } from '@/types';
 import BookThumbnail from './BookThumbnail';
 import { X, Building2, Loader2, Check, BookOpen, Edit2, Save } from 'lucide-react';
 import { useLibrary } from '@/context/LibraryContext';
@@ -11,7 +11,7 @@ import { updateBookAction } from '@/app/actions';
 interface BookDetailModalProps {
   book: Book | SavedBook;
   onClose: () => void;
-  myPrimaryLib: { code: string; name: string } | null;
+  myPrimaryLib: LibraryInfo | null;
   availabilityStatus: AvailabilityStatus | null;
   onSave?: (book: Book) => void;
   savingIsbn?: string | null;
@@ -57,6 +57,14 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   const safeSrc = book.thumbnail || '';
+  const firstAuthor = Array.isArray(book.authors) ? book.authors[0] : book.authors.split(',')[0];
+  const searchQuery = `${book.title} ${firstAuthor || ''}`.trim();
+  const kyoboUrl = `https://search.kyobobook.co.kr/search?keyword=${encodeURIComponent(searchQuery)}`;
+  
+  // 도서관 연결 URL (공식 홈페이지로 단순 연결)
+  const getLibSearchUrl = () => {
+    return myPrimaryLib?.homepage || '';
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all" onClick={onClose}>
@@ -112,12 +120,22 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
           {myPrimaryLib && availabilityStatus && (
             <div className="p-5 bg-zinc-50 dark:bg-zinc-800/50 rounded-3xl border border-zinc-100 dark:border-zinc-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-purple-500" />
-                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-50">{myPrimaryLib.name} 현황</span>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Building2 className="w-4 h-4 text-purple-500 flex-none" />
+                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-50 truncate">{myPrimaryLib.libName} 현황</span>
                 </div>
-                {availabilityStatus.status === 'loading' && <Loader2 className="w-3.5 h-3.5 text-purple-500 animate-spin" />}
+                <div className="flex items-center gap-2 flex-none">
+                  {availabilityStatus.status === 'loading' && <Loader2 className="w-3 h-3 text-purple-500 animate-spin" />}
+                  <a 
+                    href={getLibSearchUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[10px] font-bold text-zinc-500 hover:text-purple-600 hover:border-purple-200 transition-all shadow-sm"
+                  >
+                    도서관 연결
+                  </a>
+                </div>
               </div>
 
               <div className="flex items-center gap-3">
@@ -145,10 +163,16 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-xl text-[11px] font-bold w-fit">
                       소장하고 있지 않습니다.
                     </div>
-                    {availabilityStatus.otherLibsInfo && (
+                    {availabilityStatus.otherLibsInfo ? (
                       <div className="mt-1 px-1">
                         <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
                           💡 상호대차 가능 도서관: {availabilityStatus.otherLibsInfo}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-1 px-1">
+                        <p className="text-[9px] font-medium text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                          ※ 신규/통합 도서관은 국가 시스템 데이터 업데이트가 늦어질 수 있습니다. 정확한 현황은 위 [도서관 연결] 버튼을 통해 확인해 주세요.
                         </p>
                       </div>
                     )}
@@ -201,22 +225,41 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
           )}
         </div>
 
-        <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800 flex gap-3">
-          <button 
-            onClick={onClose}
-            className="flex-1 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 rounded-2xl font-bold text-lg hover:scale-[0.98] transition-all"
-          >
-            닫기
-          </button>
-          {!isSavedBook && onSave && (
+        <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800 flex flex-col gap-3">
+          <div className="flex gap-3">
             <button 
-              onClick={() => onSave(book as Book)}
-              disabled={isCurrentlySaving}
-              className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg hover:bg-purple-700 hover:scale-[0.98] transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+              onClick={onClose}
+              className={`flex-1 py-4 font-bold text-lg hover:scale-[0.98] transition-all rounded-2xl ${!isSavedBook && onSave ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300' : 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'}`}
             >
-              {isCurrentlySaving ? <Loader2 className="w-5 h-5 animate-spin" /> : '서재에 저장'}
+              닫기
             </button>
-          )}
+            {!isSavedBook && onSave && (
+              <button 
+                onClick={() => onSave(book as Book)}
+                disabled={isCurrentlySaving}
+                className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg hover:bg-purple-700 hover:scale-[0.98] transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+              >
+                {isCurrentlySaving ? <Loader2 className="w-5 h-5 animate-spin" /> : '서재에 저장'}
+              </button>
+            )}
+          </div>
+          <a 
+            href={kyoboUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all group"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-white dark:bg-zinc-800 rounded-full flex items-center justify-center p-0.5 group-hover:scale-110 transition-transform shadow-sm">
+                <svg viewBox="0 0 100 100" className="w-full h-full">
+                  <path d="M50,20 C35,20 25,35 25,55 C25,75 40,85 50,85 C60,85 75,75 75,55 C75,35 65,20 50,20 Z" fill="#5cb85c"/>
+                  <circle cx="42" cy="45" r="5" fill="white"/>
+                  <path d="M50,85 L50,95" stroke="#5cb85c" strokeWidth="4"/>
+                </svg>
+              </div>
+              <span className="tracking-tight">KYOBO 교보문고에서 보기</span>
+            </div>
+          </a>
         </div>
       </div>
     </div>

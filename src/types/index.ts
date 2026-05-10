@@ -24,6 +24,7 @@ export interface LibraryInfo {
   libCode: string;
   libName: string;
   address: string;
+  homepage?: string;
 }
 
 export interface LibApiResponse {

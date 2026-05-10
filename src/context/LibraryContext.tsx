@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
-import { SavedBook, SortColumn, SortOrder } from '@/types';
+import { SavedBook, SortColumn, SortOrder, LibraryInfo } from '@/types';
 import { 
   getBooksAction, 
   setLibraryCookieAction, 
@@ -15,7 +15,7 @@ import { useInfiniteQuery, useQueryClient, InfiniteData } from '@tanstack/react-
 
 interface LibraryContextType {
   libraryName: string | null;
-  myPrimaryLib: { code: string; name: string } | null;
+  myPrimaryLib: LibraryInfo | null;
   selectedRegion: string;
   selectedSubRegion: string;
   savedBooks: SavedBook[];
@@ -24,10 +24,10 @@ interface LibraryContextType {
   totalBooksCount: number;
   hasMoreBooks: boolean;
 
-  setLibrary: (name: string, primaryLib?: { code: string; name: string }) => Promise<void>;
+  setLibrary: (name: string, primaryLib?: LibraryInfo) => Promise<void>;
   login: (name: string, password: string, isExisting: boolean) => Promise<{ success: boolean; error: string | null }>;
   logout: () => Promise<void>;
-  updatePrimaryLib: (lib: { code: string; name: string }, region: string, subRegion: string) => void;
+  updatePrimaryLib: (lib: LibraryInfo, region: string, subRegion: string) => void;
   refreshBooks: (sortColumn?: SortColumn, sortOrder?: SortOrder) => Promise<void>;
   loadMoreBooks: () => Promise<void>;
 
@@ -55,7 +55,7 @@ export function LibraryProvider({
 }) {
   const queryClient = useQueryClient();
   const [libraryName, setLibraryName] = useState<string | null>(initialLibraryName);
-  const [myPrimaryLib, setMyPrimaryLib] = useState<{ code: string; name: string } | null>(null);
+  const [myPrimaryLib, setMyPrimaryLib] = useState<LibraryInfo | null>(null);
   const [selectedRegion, setSelectedRegion] = useState('31');
   const [selectedSubRegion, setSelectedSubRegion] = useState('31130');
   
@@ -76,9 +76,21 @@ export function LibraryProvider({
     queryKey: ['books', libraryName, sortColumn, sortOrder],
     queryFn: async ({ pageParam = 1 }) => {
       if (!libraryName) return { data: [], totalCount: 0 };
-      const res = await getBooksAction(libraryName, sortColumn, sortOrder, pageParam, PAGE_SIZE);
-      if (res.error) throw new Error(res.error);
-      return res;
+      try {
+        const res = await getBooksAction(libraryName, sortColumn, sortOrder, pageParam, PAGE_SIZE);
+        if (res.error) {
+          if (res.error.includes('세션이 만료')) {
+            logout();
+          }
+          throw new Error(res.error);
+        }
+        return res;
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('세션이 만료')) {
+          logout();
+        }
+        throw e;
+      }
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -115,11 +127,11 @@ export function LibraryProvider({
     if (savedSubRegion) setSelectedSubRegion(savedSubRegion);
 
     if (!savedLib && !initialLibraryName && !localStorage.getItem('library_owner_name')) {
-      setMyPrimaryLib({ code: '131557', name: '남양주시 별빛도서관' });
+      setMyPrimaryLib({ libCode: '131557', libName: '남양주시 별빛도서관', address: '', homepage: 'https://lib.nyj.go.kr/bnae' });
     }
   }, [initialLibraryName]);
 
-  const setLibrary = useCallback(async (name: string, primaryLib?: { code: string; name: string }) => {
+  const setLibrary = useCallback(async (name: string, primaryLib?: LibraryInfo) => {
     const finalName = normalizeName(name);
     setLibraryName(finalName);
     localStorage.setItem('library_owner_name', finalName);
@@ -162,12 +174,24 @@ export function LibraryProvider({
 
   const logout = useCallback(async () => {
     setLibraryName(null);
+    setMyPrimaryLib(null);
+    setSelectedRegion('31');
+    setSelectedSubRegion('31130');
+    
     queryClient.clear();
+    
+    // 로컬 스토리지 완벽 초기화
     localStorage.removeItem('library_owner_name');
+    localStorage.removeItem('my_primary_lib');
+    localStorage.removeItem('my_region');
+    localStorage.removeItem('my_sub_region');
+    localStorage.removeItem('last_search_query');
+    localStorage.removeItem('save_mode');
+    
     await clearLibraryCookieAction();
   }, [queryClient]);
 
-  const updatePrimaryLib = useCallback((lib: { code: string; name: string }, region: string, subRegion: string) => {
+  const updatePrimaryLib = useCallback((lib: LibraryInfo, region: string, subRegion: string) => {
     setMyPrimaryLib(lib);
     setSelectedRegion(region);
     setSelectedSubRegion(subRegion);

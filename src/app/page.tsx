@@ -55,6 +55,8 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false); // 비동기 상태 체크용 Ref 추가
+  
   const [searchPage, setSearchPage] = useState(1);
   const [lastPerformedQuery, setLastPerformedQuery] = useState('');
   const [hasMoreSearch, setHasMoreSearch] = useState(false);
@@ -72,6 +74,7 @@ export default function Home() {
   const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus | null>(null);
+  const [libSearchQuery, setLibSearchQuery] = useState('');
 
   const currentSelectedBook = useMemo(() => {
     if (selectedBookId) {
@@ -80,14 +83,21 @@ export default function Home() {
     return selectedBook;
   }, [selectedBookId, savedBooks, selectedBook]);
 
-  const VERSION = "v2.0.9"; 
+  const VERSION = "경호v0.6.5"; 
 
-  const searchBooks = useCallback(async (searchQuery: string, updateUrl = true) => {
-    if (!searchQuery || searchQuery.trim() === '[') return;
+
+
+
+  // 검색 로직 통합 및 경합 방지를 위한 핵심 함수
+  const performSearch = useCallback(async (searchQuery: string, updateUrl = true) => {
+    if (!searchQuery || searchQuery.trim() === '[' || loadingRef.current) return;
+    
+    loadingRef.current = true;
     setLoading(true);
     setSearchPage(1);
     setLastPerformedQuery(searchQuery);
     
+    // UI 최적화
     searchInputRef.current?.blur();
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -95,7 +105,7 @@ export default function Home() {
     
     if (updateUrl) {
       localStorage.setItem('last_search_query', searchQuery);
-      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?q=' + encodeURIComponent(searchQuery);
+      const newUrl = `${window.location.pathname}?q=${encodeURIComponent(searchQuery)}`;
       window.history.replaceState({ path: newUrl }, '', newUrl);
     }
 
@@ -107,25 +117,72 @@ export default function Home() {
     } catch (_error) {
       console.error('Search failed:', _error);
       showToast(_error instanceof Error ? _error.message : '도서 검색 실패', 'error');
+      setBooks([]); // 실패 시 기존 목록 초기화
     } finally {
-      setLoading(false);
+      // 탭 전환 및 렌더링 배칭을 충분히 기다린 후 해제하여 버튼 멈춤 방지
+      setTimeout(() => {
+        loadingRef.current = false;
+        setLoading(false);
+      }, 150);
     }
   }, [libraryName, showToast]);
+
+  const searchBooks = useCallback(async (searchQuery: string, updateUrl = true) => {
+    await performSearch(searchQuery, updateUrl);
+  }, [performSearch]);
+
+  useEffect(() => {
+    // 버전 업데이트 체크 및 캐시 관리 기초 로직
+    const lastVersion = localStorage.getItem('app_version');
+    if (lastVersion !== VERSION) {
+      console.log(`Update detected: ${lastVersion} -> ${VERSION}`);
+      localStorage.setItem('app_version', VERSION);
+    }
+
+    // 초기 마운트 시 URL 쿼리 파라미터 처리 (중복 호출 방지 위해 딱 한 번만 실행)
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q && q !== '' && q !== '[' && !lastPerformedQuery && !loadingRef.current) {
+      setQuery(q);
+      performSearch(q, false);
+    }
+  }, [VERSION, performSearch, lastPerformedQuery]);
+
+  const savedIsbns = useMemo(() => new Set(savedBooks.map(b => b.isbn)), [savedBooks]);
+
+  const filteredSavedBooks = useMemo(() => {
+    if (!libSearchQuery.trim()) return savedBooks;
+    const q = libSearchQuery.toLowerCase();
+    return savedBooks.filter(book => 
+      book.title.toLowerCase().includes(q) || 
+      book.authors.toLowerCase().includes(q) || 
+      book.publisher.toLowerCase().includes(q) ||
+      (book.personal_memo && book.personal_memo.toLowerCase().includes(q))
+    );
+  }, [savedBooks, libSearchQuery]);
 
   const handleAuthorClick = useCallback((author: string) => {
     const cleanName = author.split(/[(\[]/)[0].trim();
     if (!cleanName) return;
+    
     setSelectedBook(null);
     setSelectedBookId(null);
-    setActiveTab('search');
     setQuery(cleanName);
-    searchBooks(cleanName);
-  }, [searchBooks]);
+    setActiveTab('search');
+    
+    // 탭 전환 후 검색 실행 (배칭 이슈 방지)
+    setTimeout(() => {
+      performSearch(cleanName);
+    }, 100);
+  }, [performSearch]);
 
   const loadMoreSearch = useCallback(async () => {
-    if (loading || !hasMoreSearch) return;
+    if (loadingRef.current || !hasMoreSearch || !lastPerformedQuery) return;
+    
     const nextPage = searchPage + 1;
+    loadingRef.current = true;
     setLoading(true);
+    
     try {
       const { data, meta, error } = await searchBooksAction(lastPerformedQuery, libraryName || "", nextPage);
       if (error) throw new Error(error);
@@ -136,9 +193,10 @@ export default function Home() {
       console.error('Load more failed:', _error);
       showToast('추가 검색 실패', 'error');
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [loading, hasMoreSearch, searchPage, lastPerformedQuery, libraryName, showToast, searchBooks]);
+  }, [hasMoreSearch, searchPage, lastPerformedQuery, libraryName, showToast]);
 
   const checkAvailability = useCallback(async (book: SavedBook | Book) => {
     if (!myPrimaryLib) return;
@@ -149,7 +207,7 @@ export default function Home() {
     }
     setAvailabilityStatus({ status: 'loading' });
     try {
-      const { data: avail, error } = await checkBookAvailabilityAction(isbn13, myPrimaryLib.code, libraryName || '');
+      const { data: avail, error } = await checkBookAvailabilityAction(isbn13, myPrimaryLib.libCode, libraryName || '');
       if (error) throw new Error(error);
       if (avail?.hasBook === 'N') {
         const { data: others, error: othersError } = await searchLibrariesByBookAction(isbn13, selectedRegion, selectedSubRegion, libraryName || '');
@@ -268,12 +326,12 @@ export default function Home() {
     try {
       const { error } = await deleteBookAction(id, libraryName as string);
       if (error) {
-        refreshBooks();
-        showToast('삭제 오류', 'error');
+        await refreshBooks();
+        showToast('삭제 오류: ' + error, 'error');
       }
-    } catch {
-      refreshBooks();
-      showToast('네트워크 오류', 'error');
+    } catch (_error) {
+      await refreshBooks();
+      showToast('네트워크 오류로 삭제 실패', 'error');
     }
   };
 
@@ -287,12 +345,12 @@ export default function Home() {
     try {
       const { error } = await deleteBooksAction(idsToDelete, libraryName as string);
       if (error) {
-        refreshBooks();
-        showToast('일부 삭제 실패', 'error');
+        await refreshBooks();
+        showToast('일부 삭제 실패: ' + error, 'error');
       }
-    } catch {
-      refreshBooks();
-      showToast('네트워크 오류', 'error');
+    } catch (_error) {
+      await refreshBooks();
+      showToast('네트워크 오류로 삭제 실패', 'error');
     }
   };
 
@@ -337,6 +395,7 @@ export default function Home() {
                   onSelect={() => { setSelectedBook(book); setSelectedBookId(null); }}
                   onSave={handleSave} savingIsbn={savingIsbn} saveMode={saveMode}
                   onAuthorClick={handleAuthorClick}
+                  isSaved={savedIsbns.has(book.isbn)}
                 />
               ))}
               {!loading && query && books.length === 0 && (
@@ -363,6 +422,8 @@ export default function Home() {
                 if (sortColumn === column) setSort(column, sortOrder === 'asc' ? 'desc' : 'asc');
                 else { setSort(column, 'asc'); }
               }}
+              libSearchQuery={libSearchQuery}
+              setLibSearchQuery={setLibSearchQuery}
             />
 
             {isLoading && savedBooks.length === 0 ? (
@@ -371,7 +432,7 @@ export default function Home() {
               </div>
             ) : (
               <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
-                {savedBooks.map((book) => (
+                {filteredSavedBooks.map((book) => (
                   <LibraryBookCard 
                     key={book.id} book={book} onSelect={() => { setSelectedBook(book); setSelectedBookId(book.id || null); }}
                     onDelete={deleteSavedBook} selectedIds={selectedIds} 
@@ -382,8 +443,11 @@ export default function Home() {
               </div>
             )}
             
+            {savedBooks.length > 0 && filteredSavedBooks.length === 0 && (
+              <div className="py-20 text-center text-zinc-400 text-sm italic">검색 결과와 일치하는 책이 없습니다.</div>
+            )}
             {savedBooks.length === 0 && <div className="py-20 text-center text-zinc-400 text-sm">저장된 책 없음</div>}
-            {hasMoreBooks && (
+            {hasMoreBooks && !libSearchQuery && (
               <button onClick={() => loadMoreBooks()} disabled={isLoading} className="w-full py-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-600 dark:text-zinc-400 font-bold text-sm flex items-center justify-center gap-2">
                 {isFetchingNextPage ? <Loader2 className="w-4 h-4 animate-spin" /> : "서재 목록 더 보기"}
               </button>

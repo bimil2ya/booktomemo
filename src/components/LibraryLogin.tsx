@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Library, Loader2, MapPin, Clock, X, Key, Eye, EyeOff } from 'lucide-react';
+import { Library, Loader2, MapPin, Clock, X, Key, Eye, EyeOff, Info } from 'lucide-react';
 import { LibraryInfo } from '@/types';
 import { REGIONS, SUB_REGIONS } from '@/constants/regions';
 import { normalizeName } from '@/utils/helpers';
@@ -30,6 +30,7 @@ const LibraryLogin: React.FC = () => {
   // 도서관 검색 상태
   const [availableLibs, setAvailableLibs] = useState<LibraryInfo[]>([]);
   const [searchLibLoading, setSearchLibLoading] = useState(false);
+  const [fallbackMsg, setFallbackMsg] = useState<string | null>(null);
   
   // 마스터 코드/비밀번호 찾기 상태
   const [showMasterCodeInput, setShowMasterCodeInput] = useState(false);
@@ -52,15 +53,17 @@ const LibraryLogin: React.FC = () => {
     setSearchLibLoading(true);
     setError(null);
     try {
-      const { data, error } = await searchLibrariesAction(selectedRegion, selectedSubRegion, 'guest');
+      const { data, error, fallbackInfo } = await searchLibrariesAction(selectedRegion, selectedSubRegion, 'guest');
+      setFallbackMsg(fallbackInfo || null);
       if (error) {
         setError(error);
         setAvailableLibs([]);
       } else if (data) {
-        setAvailableLibs(data.map((item: { lib: { libCode: string; libName: string; address: string } }) => ({
+        setAvailableLibs(data.map((item: { lib: { libCode: string; libName: string; address: string; homepage: string } }) => ({
           libCode: item.lib.libCode,
           libName: item.lib.libName,
-          address: item.lib.address
+          address: item.lib.address,
+          homepage: item.lib.homepage
         })));
       }
     } catch {
@@ -88,6 +91,7 @@ const LibraryLogin: React.FC = () => {
       setIsExistingLibrary(exists);
       setCheckingLibrary(false);
     }, 500);
+
     return () => clearTimeout(timer);
   }, [nameInput, checkExists]);
 
@@ -208,14 +212,14 @@ const LibraryLogin: React.FC = () => {
               <div className="flex gap-2">
                 <select 
                   value={selectedRegion}
-                  onChange={(e) => updatePrimaryLib(myPrimaryLib || {code: '', name: ''}, e.target.value, '')}
+                  onChange={(e) => updatePrimaryLib(myPrimaryLib || {libCode: '', libName: '', address: ''}, e.target.value, '')}
                   className="flex-1 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-lg text-xs p-2 focus:ring-purple-500"
                 >
                   {REGIONS.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
                 </select>
                 <select 
                   value={selectedSubRegion}
-                  onChange={(e) => updatePrimaryLib(myPrimaryLib || {code: '', name: ''}, selectedRegion, e.target.value)}
+                  onChange={(e) => updatePrimaryLib(myPrimaryLib || {libCode: '', libName: '', address: ''}, selectedRegion, e.target.value)}
                   className="flex-1 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-lg text-xs p-2 focus:ring-purple-500"
                 >
                   {(SUB_REGIONS[selectedRegion] || [{code: '', name: '전체'}]).map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
@@ -226,19 +230,32 @@ const LibraryLogin: React.FC = () => {
                 <div className="max-h-40 overflow-y-auto pr-1 no-scrollbar space-y-1.5 mt-2">
                   {searchLibLoading ? (
                     <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 text-purple-500 animate-spin" /></div>
-                  ) : availableLibs.length > 0 ? (
-                    availableLibs.map(lib => (
-                      <div 
-                        key={lib.libCode}
-                        onClick={() => updatePrimaryLib({code: lib.libCode, name: lib.libName}, selectedRegion, selectedSubRegion)}
-                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.code === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
-                      >
-                        <div className="text-[11px] font-bold truncate">{lib.libName}</div>
-                        <div className={`text-[9px] mt-0.5 opacity-70 truncate ${myPrimaryLib?.code === lib.libCode ? 'text-white' : 'text-zinc-400'}`}>{lib.address}</div>
-                      </div>
-                    ))
                   ) : (
-                    <div className="py-8 text-center text-[10px] text-zinc-400">조회된 도서관이 없습니다.</div>
+                    <>
+                      {fallbackMsg && (
+                        <div className="sticky top-0 z-10 pb-2">
+                          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 rounded-lg">
+                            <p className="text-[9px] text-blue-600 dark:text-blue-400 font-bold leading-tight flex items-center gap-1">
+                              <Info className="w-3 h-3 flex-none" /> {fallbackMsg}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {availableLibs.length > 0 ? (
+                        availableLibs.map(lib => (
+                          <div 
+                            key={lib.libCode}
+                            onClick={() => updatePrimaryLib(lib, selectedRegion, selectedSubRegion)}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${myPrimaryLib?.libCode === lib.libCode ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'}`}
+                          >
+                            <div className="text-[11px] font-bold truncate">{lib.libName}</div>
+                            <div className={`text-[9px] mt-0.5 opacity-70 truncate ${myPrimaryLib?.libCode === lib.libCode ? 'text-white' : 'text-zinc-400'}`}>{lib.address}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-8 text-center text-[10px] text-zinc-400">조회된 도서관이 없습니다.</div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

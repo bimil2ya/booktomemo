@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Library, Trash2, List, LayoutGrid, ChevronUp, ChevronDown } from 'lucide-react';
+import { Library, Trash2, List, LayoutGrid, ChevronUp, ChevronDown, Search } from 'lucide-react';
 import { SortColumn, SortOrder } from '@/types';
 
 interface LibrarySortFiltersProps {
@@ -14,11 +14,14 @@ interface LibrarySortFiltersProps {
   sortColumn: SortColumn;
   sortOrder: SortOrder;
   onToggleSort: (column: SortColumn) => void;
+  libSearchQuery: string;
+  setLibSearchQuery: (val: string) => void;
 }
 
 const LibrarySortFilters: React.FC<LibrarySortFiltersProps> = ({
   savedBooksCount, selectedIdsCount, onToggleSelectAll, onDeleteSelected,
-  viewMode, setViewMode, sortColumn, sortOrder, onToggleSort
+  viewMode, setViewMode, sortColumn, sortOrder, onToggleSort,
+  libSearchQuery, setLibSearchQuery
 }) => {
   return (
     <div className="space-y-6 pt-4">
@@ -52,8 +55,20 @@ const LibrarySortFilters: React.FC<LibrarySortFiltersProps> = ({
           </button>
         </div>
       </header>
+
+      {/* 보관함 내 실시간 검색 입력창 */}
+      <div className="relative group">
+        <input 
+          type="text"
+          value={libSearchQuery}
+          onChange={(e) => setLibSearchQuery(e.target.value)}
+          placeholder="보관함에서 책 찾기 (제목, 저자, 메모...)"
+          className="w-full pl-10 pr-4 py-3 bg-zinc-100 dark:bg-zinc-800/50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-purple-500/50 transition-all"
+        />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 group-focus-within:text-purple-500 transition-colors" />
+      </div>
       
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-zinc-100 dark:border-zinc-800">
         <button onClick={() => onToggleSort('created_at')} className={`flex-none px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1 ${sortColumn === 'created_at' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500'}`}>
           저장일 {sortColumn === 'created_at' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>)}
         </button>

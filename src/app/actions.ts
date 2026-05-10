@@ -192,14 +192,47 @@ export async function deleteBooksAction(ids: number[], owner_name: string) {
 export async function searchLibrariesAction(region: string, dtl_region: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    if (!LIBRARY_API_KEY) return { data: null, error: 'API 키 누락' };
-    const res = await axios.get('http://data4library.kr/api/libSrch', {
-      params: { authKey: LIBRARY_API_KEY, format: 'json', pageSize: 100, region, ...(dtl_region ? { dtl_region } : {}) },
-      timeout: 5000
-    });
-    return { data: res.data?.response?.libs || [], error: null };
-  } catch {
-    return { data: null, error: '조회 실패' };
+    if (!LIBRARY_API_KEY) return { data: null, error: '서버 설정 오류: LIBRARY_API_KEY가 없습니다.' };
+
+    const fetchLibs = async (r: string, dtl: string) => {
+      const response = await axios.get('http://data4library.kr/api/libSrch', {
+        params: { authKey: LIBRARY_API_KEY, format: 'json', pageSize: 100, region: r, ...(dtl ? { dtl_region: dtl } : {}) },
+        timeout: 5000
+      });
+      return response.data?.response?.libs || [];
+    };
+
+    // 1차: 지정된 세부 지역으로 조회
+    let libs = await fetchLibs(region, dtl_region);
+    let fallbackInfo = null;
+
+    // 2차 Fallback: 결과가 없고 '구/군' 단위 조회인 경우 '시' 단위로 상향 (예: 38011 -> 38010)
+    if (libs.length === 0 && dtl_region && dtl_region.length === 5 && !dtl_region.endsWith('0')) {
+      const cityCode = dtl_region.substring(0, 4) + '0';
+      libs = await fetchLibs(region, cityCode);
+      if (libs.length > 0) fallbackInfo = '선택하신 구역에 결과가 없어 인근 시 단위로 검색 범위를 넓혔습니다.';
+    }
+
+    // 3차 Fallback: 여전히 결과가 없으면 해당 '도' 전체 조회
+    if (libs.length === 0 && dtl_region) {
+      libs = await fetchLibs(region, '');
+      if (libs.length > 0) fallbackInfo = '선택하신 세부 지역에 결과가 없어 해당 광역 지역 전체를 검색했습니다.';
+    }
+
+    return { data: libs, error: null, fallbackInfo };
+  } catch (_error: unknown) {
+    const err = _error as { code?: string; message?: string; response?: { data?: { response?: { error?: string } } } };
+    
+    // API 응답 본문에 에러 메시지가 있는 경우 (예: 쿼터 초과)
+    const apiError = err.response?.data?.response?.error;
+    if (apiError) {
+      if (apiError.includes('500건 이상')) return { data: null, error: '오늘의 도서관 조회 한도가 초과되었습니다. 내일 다시 시도해주세요.' };
+      if (apiError.includes('인증정보')) return { data: null, error: '도서관 서버 인증 오류가 발생했습니다. 관리자에게 문의하세요.' };
+      return { data: null, error: `도서관 서버 응답: ${apiError}` };
+    }
+
+    const isTimeout = err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'));
+    return { data: null, error: isTimeout ? '도서관 서버 혼잡으로 조회가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.' : '도서관 목록을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.' };
   }
 }
 
@@ -219,12 +252,32 @@ export async function checkBookAvailabilityAction(isbn: string, libCode: string,
 export async function searchLibrariesByBookAction(isbn: string, region: string, dtl_region: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    const res = await axios.get('http://data4library.kr/api/libSrchByBook', {
-      params: { authKey: LIBRARY_API_KEY, isbn, region, dtl_region, format: 'json' },
-      timeout: 5000
-    });
-    return { data: res.data?.response?.libs || [], error: null };
+    if (!LIBRARY_API_KEY) return { data: null, error: '서버 설정 오류' };
+
+    const fetchByBook = async (r: string, dtl: string) => {
+      const response = await axios.get('http://data4library.kr/api/libSrchByBook', {
+        params: { authKey: LIBRARY_API_KEY, isbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
+        timeout: 5000
+      });
+      return response.data?.response?.libs || [];
+    };
+
+    // 1차: 지정된 세부 지역으로 조회
+    let libs = await fetchByBook(region, dtl_region);
+    
+    // 2차 Fallback: 결과가 없고 '구/군' 단위 조회인 경우 '시' 단위로 상향
+    if (libs.length === 0 && dtl_region && dtl_region.length === 5 && !dtl_region.endsWith('0')) {
+      const cityCode = dtl_region.substring(0, 4) + '0';
+      libs = await fetchByBook(region, cityCode);
+    }
+
+    // 3차 Fallback: 여전히 결과가 없으면 해당 '도' 전체 조회
+    if (libs.length === 0 && dtl_region) {
+      libs = await fetchByBook(region, '');
+    }
+
+    return { data: libs, error: null };
   } catch {
-    return { data: null, error: '실패' };
+    return { data: null, error: '조회 실패' };
   }
 }
