@@ -1,19 +1,16 @@
 'use client';
 
 import React from 'react';
-import { LogOut, Smartphone, Database } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useLibrary } from '@/context/LibraryContext';
 
 interface LibraryHeaderProps {
   version: string;
   onTestConnection: () => void;
-  activeTab: 'search' | 'library';
-  saveMode: 'shortcut' | 'native';
-  onToggleSaveMode: () => void;
 }
 
 const LibraryHeader: React.FC<LibraryHeaderProps> = ({
-  version, onTestConnection, activeTab, saveMode, onToggleSaveMode
+  version, onTestConnection
 }) => {
   const { libraryName, logout } = useLibrary();
 
@@ -39,15 +36,6 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
         )}
       </div>
       <div className="flex items-center gap-2 flex-none">
-        {activeTab === 'search' && (
-          <button 
-            onClick={onToggleSaveMode}
-            className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-800 text-[10px] font-bold text-zinc-600 dark:text-zinc-400 shadow-sm"
-          >
-            {saveMode === 'shortcut' ? <Smartphone className="w-3 h-3 text-blue-500" /> : <Database className="w-3 h-3 text-purple-500" />}
-            {saveMode === 'shortcut' ? '단축어 모드' : '자체 저장'}
-          </button>
-        )}
         <button onClick={handleLogout} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
           <LogOut className="w-4 h-4" />
         </button>

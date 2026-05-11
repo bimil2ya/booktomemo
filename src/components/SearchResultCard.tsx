@@ -10,13 +10,12 @@ interface SearchResultCardProps {
   onSelect: () => void;
   onSave: (book: Book) => void;
   savingIsbn: string | null;
-  saveMode: 'shortcut' | 'native';
   onAuthorClick?: (author: string) => void;
   isSaved?: boolean;
 }
 
 const SearchResultCard: React.FC<SearchResultCardProps> = ({
-  book, onSelect, onSave, savingIsbn, saveMode, onAuthorClick, isSaved = false
+  book, onSelect, onSave, savingIsbn, onAuthorClick, isSaved = false
 }) => {
   return (
     <div 
@@ -56,7 +55,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({
               ? 'bg-zinc-100 text-zinc-400 animate-pulse' 
               : isSaved 
                 ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-default' 
-                : (saveMode === 'shortcut' ? 'bg-zinc-900 text-white' : 'bg-purple-600 text-white shadow-sm shadow-purple-500/20 active:scale-[0.98]')
+                : 'bg-purple-600 text-white shadow-sm shadow-purple-500/20 active:scale-[0.98]'
           }`}
         >
           {savingIsbn === book.isbn ? (
@@ -64,7 +63,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({
           ) : isSaved ? (
             <>보관함에 있음</>
           ) : (
-            saveMode === 'shortcut' ? '애플 메모로 보내기' : '서재에 저장'
+            '서재에 저장'
           )}
         </button>
       </div>

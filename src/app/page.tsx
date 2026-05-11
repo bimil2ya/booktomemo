@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import imageCompression from 'browser-image-compression';
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -12,7 +11,6 @@ import {
   checkBookAvailabilityAction, 
   searchLibrariesByBookAction,
   searchBooksAction,
-  analyzeImageAction,
   checkLibraryExistsAction
 } from './actions';
 import { useLibrary } from '@/context/LibraryContext';
@@ -59,16 +57,15 @@ export default function Home() {
   
   const [searchPage, setSearchPage] = useState(1);
   const [lastPerformedQuery, setLastPerformedQuery] = useState('');
+  const [totalSearchCount, setTotalSearchCount] = useState(0);
+  const [searchWithin, setSearchWithin] = useState(false);
   const [hasMoreSearch, setHasMoreSearch] = useState(false);
   const [savingIsbn, setSavingIsbn] = useState<string | null>(null);
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [saveMode, setSaveMode] = useState<'shortcut' | 'native'>('native');
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [swipingId, setSwipingId] = useState<number | null>(null);
   const touchStartX = useRef<number>(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
@@ -83,7 +80,7 @@ export default function Home() {
     return selectedBook;
   }, [selectedBookId, savedBooks, selectedBook]);
 
-  const VERSION = "경호v2.4.1";
+  const VERSION = "경호v2.5.0";
 
 
 
@@ -112,11 +109,13 @@ export default function Home() {
       const { data, meta, error } = await searchBooksAction(searchQuery, libraryName || "", 1);
       if (error) throw new Error(error);
       setBooks(data || []);
+      setTotalSearchCount(meta?.pageable_count || 0);
       setHasMoreSearch(meta ? !meta.is_end : false);
     } catch (e) {
       console.error('Search failed:', e);
       showToast(e instanceof Error ? e.message : '도서 검색 실패', 'error');
       setBooks([]); // 실패 시 기존 목록 초기화
+      setTotalSearchCount(0);
     } finally {
       // 탭 전환 및 렌더링 배칭을 충분히 기다린 후 해제하여 버튼 멈춤 방지
       setTimeout(() => {
@@ -125,6 +124,18 @@ export default function Home() {
       }, 150);
     }
   }, [libraryName, showToast]);
+
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    let finalQuery = query.trim();
+    if (searchWithin && lastPerformedQuery) {
+      finalQuery = `${lastPerformedQuery} ${finalQuery}`;
+      setQuery(finalQuery);
+    }
+    await performSearch(finalQuery);
+  }, [query, searchWithin, lastPerformedQuery, performSearch]);
 
   const searchBooks = useCallback(async (searchQuery: string, updateUrl = true) => {
     await performSearch(searchQuery, updateUrl);
@@ -238,8 +249,6 @@ export default function Home() {
   }, [myPrimaryLib, selectedRegion, selectedSubRegion, libraryName]);
 
   useEffect(() => {
-    const lastMode = localStorage.getItem('save_mode') as 'shortcut' | 'native';
-    if (lastMode) setSaveMode(lastMode);
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
     if (q && q !== '' && q !== '[') {
@@ -252,41 +261,6 @@ export default function Home() {
     if (currentSelectedBook) checkAvailability(currentSelectedBook);
     else setAvailabilityStatus(null);
   }, [currentSelectedBook, checkAvailability]);
-
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawFile = e.target.files?.[0];
-    if (!rawFile) return;
-    if (rawFile.size > 10 * 1024 * 1024) {
-      showToast('파일 용량 너무 큼 (최대 10MB)', 'error');
-      return;
-    }
-    setOcrLoading(true);
-    try {
-      const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
-      const compressedFile = await imageCompression(rawFile, options);
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-      });
-      reader.readAsDataURL(compressedFile);
-      const base64Image = await base64Promise;
-      const { data, error } = await analyzeImageAction(base64Image, compressedFile.type, libraryName || "");
-      if (error) throw new Error(error);
-      if (data && (data.title || data.author)) {
-        const optimizedQuery = `${data.title} ${data.author}`.trim();
-        setQuery(optimizedQuery);
-        searchBooks(optimizedQuery);
-        setTimeout(() => searchInputRef.current?.focus(), 100);
-      } else {
-        showToast('책 정보 찾지 못함', 'info');
-      }
-    } catch (e) {
-      console.error('OCR Error:', e);
-      showToast('사진 인식 오류', 'error');
-    } finally {
-      setOcrLoading(false);
-    }
-  };
 
   const handleSave = async (book: Book) => {
     if (!libraryName) return;
@@ -358,16 +332,11 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-32 font-sans transition-colors">
       <LibraryHeader 
-        version={VERSION} activeTab={activeTab} saveMode={saveMode}
+        version={VERSION}
         onTestConnection={async () => {
           const { error } = await checkLibraryExistsAction(libraryName || '');
           if (error) showToast('서버 연결 실패', 'error');
           else showToast('서버 연결 양호');
-        }}
-        onToggleSaveMode={() => {
-          const newMode = saveMode === 'shortcut' ? 'native' : 'shortcut';
-          setSaveMode(newMode);
-          localStorage.setItem('save_mode', newMode);
         }}
       />
 
@@ -376,28 +345,36 @@ export default function Home() {
           <div className="space-y-8 px-4">
             <BookSearchBar 
               query={query} setQuery={setQuery} 
-              onSearch={(e) => { e.preventDefault(); searchBooks(query); }}
-              loading={loading} ocrLoading={ocrLoading}
-              fileInputRef={fileInputRef} onPhotoUpload={handlePhotoUpload}
-              saveMode={saveMode} inputRef={searchInputRef}
+              onSearch={handleSearch}
+              loading={loading}
+              searchWithin={searchWithin}
+              setSearchWithin={setSearchWithin}
+              inputRef={searchInputRef}
             />
 
-            {loading && books.length === 0 && (
-              <div className="grid gap-3 max-w-lg mx-auto">
-                {[...Array(5)].map((_, i) => <BookCardSkeleton key={i} />)}
-              </div>
-            )}
             <div className="grid gap-3 max-w-lg mx-auto">
+              {!loading && lastPerformedQuery && (
+                <div className="text-zinc-600 dark:text-zinc-400 text-xs px-1 py-2 leading-relaxed">
+                  요청하신 <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1 font-bold rounded">&apos;{lastPerformedQuery}&apos;</span> 에 대한 자료 검색 결과이며 총 <span className="text-purple-600 dark:text-purple-400 font-bold">{totalSearchCount.toLocaleString()}건</span>이 검색되었습니다.
+                </div>
+              )}
+
+              {loading && books.length === 0 && (
+                <div className="grid gap-3">
+                  {[...Array(5)].map((_, i) => <BookCardSkeleton key={i} />)}
+                </div>
+              )}
+              
               {books.map((book, idx) => (
                 <SearchResultCard 
                   key={idx} book={book} 
                   onSelect={() => { setSelectedBook(book); setSelectedBookId(null); }}
-                  onSave={handleSave} savingIsbn={savingIsbn} saveMode={saveMode}
+                  onSave={handleSave} savingIsbn={savingIsbn}
                   onAuthorClick={handleAuthorClick}
                   isSaved={savedIsbns.has(book.isbn)}
                 />
               ))}
-              {!loading && query && books.length === 0 && (
+              {!loading && query && books.length === 0 && lastPerformedQuery && (
                 <div className="py-20 text-center text-zinc-400 text-sm">검색 결과 없음</div>
               )}
               {hasMoreSearch && (

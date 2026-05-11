@@ -3,29 +3,12 @@
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import { cookies } from 'next/headers';
-import Anthropic from '@anthropic-ai/sdk';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
   return createClient(url, key);
 }
-
-function getAnthropic() {
-  const key = process.env.ANTHROPIC_API_KEY || '';
-  return new Anthropic({ apiKey: key });
-}
-
-
-
-
-
-
-
-
-
-
-
 
 async function verifySession(ownerName: string, allowGuest: boolean = false) {
   if (allowGuest && ownerName === 'guest') return;
@@ -40,35 +23,6 @@ function handleSupabaseError(error: unknown, context: string) {
   if (!error) return '[' + context + '] 알 수 없는 오류가 발생했습니다.';
   const err = error as { code?: string; message?: string; hint?: string };
   return '[' + context + ' 실패] ' + (err.message || String(err));
-}
-
-export async function analyzeImageAction(base64Image: string, contentType: string, owner_name: string) {
-  try {
-    await verifySession(owner_name);
-    if (!process.env.ANTHROPIC_API_KEY) return { data: null, error: '분석 서버 설정(API 키)이 누락되었습니다.' };
-    const response = await getAnthropic().messages.create({
-      model: 'claude-3-5-sonnet-latest',
-      max_tokens: 100,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: contentType as 'image/jpeg', data: base64Image } },
-          { type: 'text', text: '이 이미지에서 책 제목과 저자 이름을 추출해줘. 제목: [제목], 저자: [저자] 형식으로만 답해줘.' }
-        ]
-      }]
-    });
-    const content = response.content[0];
-    if (content.type === 'text') {
-      const text = content.text;
-      const title = text.match(/제목:\s*(.+?)(?:,|$)/)?.[1]?.trim() || '';
-      const author = text.match(/저자:\s*(.+?)(?:,|$)/)?.[1]?.trim() || '';
-      return { data: { title, author }, error: null };
-    }
-    return { data: null, error: '텍스트를 추출하지 못했습니다.' };
-  } catch (e: unknown) {
-    console.error('OCR Error:', e);
-    return { data: null, error: '이미지 분석 중 오류가 발생했습니다.' };
-  }
 }
 
 export async function setLibraryCookieAction(name: string) {
