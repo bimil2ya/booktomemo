@@ -15,12 +15,12 @@ export const SUB_REGIONS: Record<string, { code: string; name: string }[]> = {
     { code: '31030', name: '의정부시' }, { code: '31041', name: '안양시 만안구' }, { code: '31042', name: '안양시 동안구' },
     { code: '31050', name: '부천시' }, { code: '31060', name: '광명시' }, { code: '31070', name: '평택시' }, { code: '31080', name: '동두천시' },
     { code: '31091', name: '안산시 상록구' }, { code: '31092', name: '안산시 단원구' }, { code: '31101', name: '고양시 덕양구' }, { code: '31103', name: '고양시 일산동구' }, { code: '31104', name: '고양시 일산서구' },
-    { code: '31110', name: '용인시 처인구' }, { code: '31111', name: '용인시 기흥구' }, { code: '31112', name: '용인시 수지구' },
+    { code: '31110', name: '과천시' }, { code: '31190', name: '용인시' },
     { code: '31120', name: '구리시' }, { code: '31130', name: '남양주시' }, { code: '31140', name: '오산시' }, { code: '31150', name: '시흥시' },
-    { code: '31160', name: '군포시' }, { code: '31170', name: '의왕시' }, { code: '31180', name: '하남시' }, { code: '31190', name: '파주시' },
-    { code: '31200', name: '이천시' }, { code: '31210', name: '안성시' }, { code: '31220', name: '김포시' }, { code: '31230', name: '화성시' },
-    { code: '31240', name: '광주시' }, { code: '31250', name: '양주시' }, { code: '31260', name: '포천시' }, { code: '31270', name: '여주시' },
-    { code: '31280', name: '연천군' }, { code: '31290', name: '가평군' }, { code: '31300', name: '양평군' }
+    { code: '31160', name: '군포시' }, { code: '31170', name: '의왕시' }, { code: '31180', name: '하남시' }, { code: '31200', name: '파주시' },
+    { code: '31210', name: '이천시' }, { code: '31220', name: '안성시' }, { code: '31230', name: '김포시' }, { code: '31240', name: '화성시' },
+    { code: '31250', name: '광주시' }, { code: '31260', name: '양주시' }, { code: '31270', name: '포천시' }, { code: '31280', name: '여주시' },
+    { code: '31290', name: '연천군' }, { code: '31300', name: '가평군' }, { code: '31310', name: '양평군' }
   ],
   '11': [
     { code: '', name: '전체' },
@@ -70,7 +70,7 @@ export const SUB_REGIONS: Record<string, { code: string; name: string }[]> = {
   ],
   '33': [
     { code: '', name: '전체' },
-    { code: '33011', name: '청주시 상당구' }, { code: '33012', name: '청주시 서원구' }, { code: '33013', name: '청주시 흥덕구' }, { code: '33014', name: '청주시 청원구' },
+    { code: '33041', name: '청주시 상당구' }, { code: '33042', name: '청주시 서원구' }, { code: '33043', name: '청주시 흥덕구' }, { code: '33044', name: '청주시 청원구' },
     { code: '33020', name: '충주시' }, { code: '33030', name: '제천시' }
   ],
   '34': [
@@ -94,7 +94,7 @@ export const SUB_REGIONS: Record<string, { code: string; name: string }[]> = {
   ],
   '38': [
     { code: '', name: '전체' },
-    { code: '38111', name: '창원시 의창구' }, { code: '38112', name: '창원시 성산구' }, { code: '38113', name: '창원시 마산합포구' }, { code: '38114', name: '창원시 마산회원구' }, { code: '38115', name: '창원시 진해구' },
+    { code: '38112', name: '창원시 의창구' }, { code: '38113', name: '창원시 성산구' }, { code: '38114', name: '창원시 마산합포구' }, { code: '38115', name: '창원시 마산회원구' }, { code: '38510', name: '창원시 진해구' },
     { code: '38030', name: '진주시' }, { code: '38050', name: '통영시' }, { code: '38070', name: '사천시' }, { code: '38080', name: '김해시' }, { code: '38090', name: '밀양시' }, { code: '38100', name: '거제시' }, { code: '38110', name: '양산시' }
   ],
   '39': [

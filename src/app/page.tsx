@@ -83,7 +83,7 @@ export default function Home() {
     return selectedBook;
   }, [selectedBookId, savedBooks, selectedBook]);
 
-  const VERSION = "경호v2.3.2";
+  const VERSION = "경호v2.4.0";
 
 
 
