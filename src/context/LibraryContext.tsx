@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { SavedBook, SortColumn, SortOrder, LibraryInfo } from '@/types';
 import { 
   getBooksAction, 
@@ -62,6 +62,7 @@ export function LibraryProvider({
   const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   
+  const isInitialMount = useRef(true);
   const PAGE_SIZE = 20;
 
   // React Query - Infinite Query for Books
@@ -94,23 +95,31 @@ export function LibraryProvider({
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
-      const loadedCount = allPages.flatMap(page => page.data || []).length;
+      const loadedCount = allPages.reduce((acc, page) => acc + (page.data?.length || 0), 0);
       if (loadedCount < (lastPage.totalCount || 0)) {
         return allPages.length + 1;
       }
       return undefined;
     },
     enabled: !!libraryName,
+    staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
   });
 
-  // Flattened books from all pages
+  // Flattened books from all pages (useMemo optimized)
   const savedBooks = useMemo(() => {
-    return data?.pages.flatMap(page => page.data || []) || [];
+    if (!data) return [];
+    return data.pages.reduce((acc: SavedBook[], page) => {
+      if (page.data) return [...acc, ...page.data];
+      return acc;
+    }, []);
   }, [data]);
 
   const totalBooksCount = data?.pages[0]?.totalCount || 0;
 
+  // 초기 상태 복구
   useEffect(() => {
+    if (!isInitialMount.current) return;
+    
     if (initialLibraryName) {
       localStorage.setItem('library_owner_name', initialLibraryName);
     } else {
@@ -122,13 +131,17 @@ export function LibraryProvider({
     const savedRegion = localStorage.getItem('my_region');
     const savedSubRegion = localStorage.getItem('my_sub_region');
 
-    if (savedLib) setMyPrimaryLib(JSON.parse(savedLib));
+    if (savedLib) {
+      try { setMyPrimaryLib(JSON.parse(savedLib)); } catch (e) { console.error('Parse lib error', e); }
+    }
     if (savedRegion) setSelectedRegion(savedRegion);
     if (savedSubRegion) setSelectedSubRegion(savedSubRegion);
 
     if (!savedLib && !initialLibraryName && !localStorage.getItem('library_owner_name')) {
       setMyPrimaryLib({ libCode: '131557', libName: '남양주시 별빛도서관', address: '', homepage: 'https://lib.nyj.go.kr/bnae' });
     }
+
+    isInitialMount.current = false;
   }, [initialLibraryName]);
 
   const setLibrary = useCallback(async (name: string, primaryLib?: LibraryInfo) => {
@@ -180,7 +193,6 @@ export function LibraryProvider({
     
     queryClient.clear();
     
-    // 로컬 스토리지 완벽 초기화
     localStorage.removeItem('library_owner_name');
     localStorage.removeItem('my_primary_lib');
     localStorage.removeItem('my_region');
@@ -196,7 +208,7 @@ export function LibraryProvider({
     setSelectedRegion(region);
     setSelectedSubRegion(subRegion);
 
-    localStorage.setItem('my_primary_lib', JSON.stringify(lib));
+    if (lib) localStorage.setItem('my_primary_lib', JSON.stringify(lib));
     localStorage.setItem('my_region', region);
     localStorage.setItem('my_sub_region', subRegion);
   }, []);
@@ -216,14 +228,13 @@ export function LibraryProvider({
     setSortOrder(order);
   }, []);
 
-  // Optimistic UI support - Manual cache manipulation
+  // Optimistic UI support
   const addBookOptimistic = useCallback((book: SavedBook) => {
     const queryKey = ['books', libraryName, sortColumn, sortOrder];
     
-    // ID가 없으면 임시 ID 부여 (낙관적 UI용)
     const optimisticBook = {
       ...book,
-      id: book.id || -(Date.now() + Math.floor(Math.random() * 1000)), // 고유한 임시 ID 생성
+      id: book.id || -(Date.now() + Math.floor(Math.random() * 1000)),
       created_at: book.created_at || new Date().toISOString()
     };
 
@@ -240,23 +251,19 @@ export function LibraryProvider({
         totalCount: (newPages[0].totalCount || 0) + 1
       };
       
-      return {
-        ...oldData,
-        pages: newPages
-      };
+      return { ...oldData, pages: newPages };
     });
     
-    return optimisticBook.id; // 부여된 ID 반환
+    return optimisticBook.id;
   }, [queryClient, libraryName, sortColumn, sortOrder]);
 
   const removeBookOptimistic = useCallback((bookId: number) => {
-    // Proper React Query Optimistic Update
     const queryKey = ['books', libraryName, sortColumn, sortOrder];
     queryClient.setQueryData(queryKey, (oldData: InfiniteData<{ data: SavedBook[]; totalCount: number }> | undefined) => {
       if (!oldData) return oldData;
       return {
         ...oldData,
-        pages: oldData.pages.map((page: { data: SavedBook[]; totalCount: number }) => ({
+        pages: oldData.pages.map((page) => ({
           ...page,
           data: page.data.filter((b: SavedBook) => b.id !== bookId),
           totalCount: Math.max(0, (page.totalCount || 0) - 1)
@@ -271,7 +278,7 @@ export function LibraryProvider({
       if (!oldData) return oldData;
       return {
         ...oldData,
-        pages: oldData.pages.map((page: { data: SavedBook[]; totalCount: number }) => ({
+        pages: oldData.pages.map((page) => ({
           ...page,
           data: page.data.map((b: SavedBook) => b.id === bookId ? { ...b, ...data } : b)
         }))

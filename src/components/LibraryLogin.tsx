@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Library, Loader2, MapPin, Clock, X, Key, Eye, EyeOff, Info } from 'lucide-react';
 import { LibraryInfo } from '@/types';
 import { REGIONS, SUB_REGIONS } from '@/constants/regions';
@@ -31,6 +31,7 @@ const LibraryLogin: React.FC = () => {
   const [availableLibs, setAvailableLibs] = useState<LibraryInfo[]>([]);
   const [searchLibLoading, setSearchLibLoading] = useState(false);
   const [fallbackMsg, setFallbackMsg] = useState<string | null>(null);
+  const lastFetchTime = useRef<number>(0);
   
   // 마스터 코드/비밀번호 찾기 상태
   const [showMasterCodeInput, setShowMasterCodeInput] = useState(false);
@@ -48,10 +49,15 @@ const LibraryLogin: React.FC = () => {
     }
   }, []);
 
-  // 도서관 목록 호출
+  // 도서관 목록 호출 (Throttling 적용: 0.8초 이내 재호출 방지)
   const fetchLibraries = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastFetchTime.current < 800) return;
+    
     setSearchLibLoading(true);
     setError(null);
+    lastFetchTime.current = now;
+
     try {
       const { data, error, fallbackInfo } = await searchLibrariesAction(selectedRegion, selectedSubRegion, 'guest');
       setFallbackMsg(fallbackInfo || null);
