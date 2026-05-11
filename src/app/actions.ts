@@ -208,6 +208,8 @@ export async function searchLibrariesAction(region: string, dtl_region: string, 
         params: { authKey: process.env.LIBRARY_API_KEY, format: 'json', pageSize: 100, region: r, ...(dtl ? { dtl_region: dtl } : {}) },
         timeout: 5000
       });
+      const errorMsg = response.data?.response?.error;
+      if (errorMsg) throw { response: { data: response.data } }; // catch 블록에서 처리되도록 유도
       return response.data?.response?.libs || [];
     };
 
@@ -269,6 +271,8 @@ export async function searchLibrariesByBookAction(isbn: string, region: string, 
         params: { authKey: process.env.LIBRARY_API_KEY, isbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
         timeout: 5000
       });
+      const errorMsg = response.data?.response?.error;
+      if (errorMsg) throw { response: { data: response.data } };
       return response.data?.response?.libs || [];
     };
 

@@ -69,12 +69,15 @@ const LibraryLogin: React.FC = () => {
         setError(error);
         setAvailableLibs([]);
       } else if (data) {
-        setAvailableLibs(data.map((item: { lib: { libCode: string; libName: string; address: string; homepage: string } }) => ({
-          libCode: item.lib.libCode,
-          libName: item.lib.libName,
-          address: item.lib.address,
-          homepage: item.lib.homepage
-        })));
+        const sortedLibs = data
+          .map((item: { lib: { libCode: string; libName: string; address: string; homepage: string } }) => ({
+            libCode: item.lib.libCode,
+            libName: item.lib.libName,
+            address: item.lib.address,
+            homepage: item.lib.homepage
+          }))
+          .sort((a, b) => a.libName.localeCompare(b.libName, 'ko'));
+        setAvailableLibs(sortedLibs);
       }
     } catch {
       if (requestId === lastRequestId.current) {
