@@ -49,14 +49,16 @@ const LibraryLogin: React.FC = () => {
     }
   }, []);
 
-  // 도서관 목록 호출 (Throttling 적용: 0.8초 이내 재호출 방지)
+  // 도서관 목록 호출 (Throttling 적용: 초기 로드 이후 잦은 변경 방지)
+  const isFirstLoad = useRef(true);
   const fetchLibraries = useCallback(async () => {
     const now = Date.now();
-    if (now - lastFetchTime.current < 800) return;
+    if (!isFirstLoad.current && now - lastFetchTime.current < 300) return;
     
     setSearchLibLoading(true);
     setError(null);
     lastFetchTime.current = now;
+    isFirstLoad.current = false;
 
     try {
       const { data, error, fallbackInfo } = await searchLibrariesAction(selectedRegion, selectedSubRegion, 'guest');
