@@ -5,20 +5,15 @@ import axios from 'axios';
 import { cookies } from 'next/headers';
 import Anthropic from '@anthropic-ai/sdk';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const LIBRARY_API_KEY = process.env.LIBRARY_API_KEY || '';
-const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || '';
-const ADMIN_MASTER_CODE = process.env.ADMIN_MASTER_CODE || '8633';
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-
-const anthropic = new Anthropic({
-  apiKey: ANTHROPIC_API_KEY,
-});
+const getEnv = (key: string) => process.env[key] || '';
 
 function getSupabase() {
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return createClient(getEnv('NEXT_PUBLIC_SUPABASE_URL'), getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'));
 }
+
+const getAnthropic = () => new Anthropic({ apiKey: getEnv('ANTHROPIC_API_KEY') });
+
+
 
 async function verifySession(ownerName: string, allowGuest: boolean = false) {
   if (allowGuest && ownerName === 'guest') return;
@@ -38,14 +33,14 @@ function handleSupabaseError(error: unknown, context: string) {
   if (err.code?.startsWith('23')) return '[데이터 오류] 요청한 작업을 수행할 수 없습니다.'; // 제약 조건 위반 등
   if (err.code === '42P01') return '[시스템 오류] 서버 구성이 올바르지 않습니다.';
 
-  return '[' + context + ' 실패] 잠시 후 다시 시도해 주세요.';
+  return '[' + context + ' 실패] ' + (err.message || String(err));
 }
 
 export async function analyzeImageAction(base64Image: string, contentType: string, owner_name: string) {
   try {
     await verifySession(owner_name);
-    if (!ANTHROPIC_API_KEY) return { data: null, error: '분석 서버 설정(API 키)이 누락되었습니다.' };
-    const response = await anthropic.messages.create({
+    if (!getEnv('ANTHROPIC_API_KEY')) return { data: null, error: '분석 서버 설정(API 키)이 누락되었습니다.' };
+    const response = await getAnthropic().messages.create({
       model: 'claude-3-5-sonnet-latest',
       max_tokens: 100,
       messages: [{
@@ -111,7 +106,7 @@ export async function verifyLibraryPasswordAction(ownerName: string, password: s
 
 export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, masterCode: string) {
   try {
-    if (masterCode !== ADMIN_MASTER_CODE) return { password: null, error: 'MASTER_CODE_INCORRECT' };
+    if (masterCode !== getEnv('ADMIN_MASTER_CODE')) return { password: null, error: 'MASTER_CODE_INCORRECT' };
     const { data, error } = await getSupabase().from('libraries').select('password').eq('owner_name', ownerName).single();
     if (error) throw error;
     return { password: data.password, error: null };
@@ -123,10 +118,10 @@ export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, 
 export async function searchBooksAction(query: string, owner_name: string, page: number = 1, size: number = 20) {
   try {
     await verifySession(owner_name, true);
-    if (!KAKAO_REST_API_KEY) return { data: null, error: '도서 검색 API 키가 누락되었습니다.' };
+    if (!getEnv('KAKAO_REST_API_KEY')) return { data: null, error: '도서 검색 API 키가 누락되었습니다.' };
     const res = await axios.get('https://dapi.kakao.com/v3/search/book', {
       params: { query, page, size },
-      headers: { Authorization: 'KakaoAK ' + KAKAO_REST_API_KEY },
+      headers: { Authorization: 'KakaoAK ' + getEnv('KAKAO_REST_API_KEY') },
       timeout: 5000
     });
     return { data: res.data.documents || [], meta: res.data.meta, error: null };
@@ -200,11 +195,11 @@ export async function deleteBooksAction(ids: number[], owner_name: string) {
 export async function searchLibrariesAction(region: string, dtl_region: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    if (!LIBRARY_API_KEY) return { data: null, error: '도서관 API 키가 누락되었습니다.' };
+    if (!getEnv('LIBRARY_API_KEY')) return { data: null, error: '도서관 API 키가 누락되었습니다.' };
 
     const fetchLibs = async (r: string, dtl: string) => {
       const response = await axios.get('http://data4library.kr/api/libSrch', {
-        params: { authKey: LIBRARY_API_KEY, format: 'json', pageSize: 100, region: r, ...(dtl ? { dtl_region: dtl } : {}) },
+        params: { authKey: getEnv('LIBRARY_API_KEY'), format: 'json', pageSize: 100, region: r, ...(dtl ? { dtl_region: dtl } : {}) },
         timeout: 5000
       });
       return response.data?.response?.libs || [];
@@ -247,9 +242,9 @@ export async function searchLibrariesAction(region: string, dtl_region: string, 
 export async function checkBookAvailabilityAction(isbn: string, libCode: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    if (!LIBRARY_API_KEY) return { data: null, error: '도서관 API 키 누락' };
+    if (!getEnv('LIBRARY_API_KEY')) return { data: null, error: '도서관 API 키 누락' };
     const res = await axios.get('http://data4library.kr/api/bookExist', {
-      params: { authKey: LIBRARY_API_KEY, libCode, isbn13: isbn, format: 'json' },
+      params: { authKey: getEnv('LIBRARY_API_KEY'), libCode, isbn13: isbn, format: 'json' },
       timeout: 5000
     });
     return { data: res.data?.response?.result || { hasBook: 'N' }, error: null };
@@ -261,11 +256,11 @@ export async function checkBookAvailabilityAction(isbn: string, libCode: string,
 export async function searchLibrariesByBookAction(isbn: string, region: string, dtl_region: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    if (!LIBRARY_API_KEY) return { data: null, error: '도서관 API 키 누락' };
+    if (!getEnv('LIBRARY_API_KEY')) return { data: null, error: '도서관 API 키 누락' };
 
     const fetchByBook = async (r: string, dtl: string) => {
       const response = await axios.get('http://data4library.kr/api/libSrchByBook', {
-        params: { authKey: LIBRARY_API_KEY, isbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
+        params: { authKey: getEnv('LIBRARY_API_KEY'), isbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
         timeout: 5000
       });
       return response.data?.response?.libs || [];
