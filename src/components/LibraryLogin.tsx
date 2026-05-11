@@ -50,24 +50,26 @@ const LibraryLogin: React.FC = () => {
   }, []);
 
   // 도서관 목록 호출 (Throttling 적용: 초기 로드 이후 잦은 변경 방지)
-  const isFirstLoad = useRef(true);
+  const lastRequestId = useRef(0);
   const fetchLibraries = useCallback(async () => {
-    const now = Date.now();
-    if (!isFirstLoad.current && now - lastFetchTime.current < 300) return;
-    
+    const requestId = ++lastRequestId.current;
     setSearchLibLoading(true);
     setError(null);
-    lastFetchTime.current = now;
-    isFirstLoad.current = false;
+
+    // Debounce: 아주 짧은 대기를 통해 연속적인 상태 업데이트를 하나로 묶음
+    await new Promise(resolve => setTimeout(resolve, 150));
+    if (requestId !== lastRequestId.current) return;
 
     try {
       const { data, error, fallbackInfo } = await searchLibrariesAction(selectedRegion, selectedSubRegion, 'guest');
+      if (requestId !== lastRequestId.current) return;
+
       setFallbackMsg(fallbackInfo || null);
       if (error) {
         setError(error);
         setAvailableLibs([]);
       } else if (data) {
-        setAvailableLibs(data.map((item: { lib: { libCode: string; libName: string; address: string; homepage: string } }) => ({
+        setAvailableLibs(data.map((item) => ({
           libCode: item.lib.libCode,
           libName: item.lib.libName,
           address: item.lib.address,
@@ -75,9 +77,13 @@ const LibraryLogin: React.FC = () => {
         })));
       }
     } catch {
-      setError('도서관 목록을 불러오는 중 오류가 발생했습니다.');
+      if (requestId === lastRequestId.current) {
+        setError('도서관 목록을 불러오는 중 오류가 발생했습니다.');
+      }
     } finally {
-      setSearchLibLoading(false);
+      if (requestId === lastRequestId.current) {
+        setSearchLibLoading(false);
+      }
     }
   }, [selectedRegion, selectedSubRegion]);
 
