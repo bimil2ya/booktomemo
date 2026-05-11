@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Library, Loader2, MapPin, Clock, X, Key, Eye, EyeOff, Info, User, Lock } from 'lucide-react';
 import { LibraryInfo } from '@/types';
 import { REGIONS, SUB_REGIONS } from '@/constants/regions';
@@ -40,6 +40,14 @@ const LibraryLogin: React.FC = () => {
 
   // 히스토리 상태
   const [libraryHistory, setLibraryHistory] = useState<string[]>([]);
+
+  // 선택된 광역 지역의 하위 지역 목록을 가나다순으로 정렬 (useMemo)
+  const sortedSubRegions = useMemo(() => {
+    const subOptions = [...(SUB_REGIONS[selectedRegion] || [{ code: '', name: '전체' }])];
+    const allOption = subOptions.find(o => o.code === '');
+    const otherOptions = subOptions.filter(o => o.code !== '').sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    return allOption ? [allOption, ...otherOptions] : otherOptions;
+  }, [selectedRegion]);
 
   useEffect(() => {
     const history = localStorage.getItem('library_history');
@@ -250,7 +258,7 @@ const LibraryLogin: React.FC = () => {
                   onChange={(e) => updatePrimaryLib(myPrimaryLib || {libCode: '', libName: '', address: ''}, selectedRegion, e.target.value)}
                   className="flex-1 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold p-3 focus:ring-2 focus:ring-purple-500 outline-none shadow-sm cursor-pointer"
                 >
-                  {(SUB_REGIONS[selectedRegion] || [{code: '', name: '전체'}]).map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                  {sortedSubRegions.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                 </select>
               </div>
 
