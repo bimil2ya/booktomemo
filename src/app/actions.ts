@@ -5,13 +5,20 @@ import axios from 'axios';
 import { cookies } from 'next/headers';
 import Anthropic from '@anthropic-ai/sdk';
 
-const getEnv = (key: string) => process.env[key] || '';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const LIBRARY_API_KEY = process.env.LIBRARY_API_KEY || '';
+const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY || '';
+const ADMIN_MASTER_CODE = process.env.ADMIN_MASTER_CODE || '8633';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+const anthropic = new Anthropic({
+  apiKey: ANTHROPIC_API_KEY,
+});
 
 function getSupabase() {
-  return createClient(getEnv('NEXT_PUBLIC_SUPABASE_URL'), getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'));
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
-
-const getAnthropic = () => new Anthropic({ apiKey: getEnv('ANTHROPIC_API_KEY') });
 
 
 
@@ -27,20 +34,14 @@ function handleSupabaseError(error: unknown, context: string) {
   console.error(context + ' Error:', error);
   if (!error) return '[' + context + '] 알 수 없는 오류가 발생했습니다.';
   const err = error as { code?: string; message?: string; hint?: string };
-
-  // 보안을 위해 상세 DB 에러 메시지는 서버 로그에만 남기고, 클라이언트에는 카테고리별 메시지만 전달
-  if (err.code === 'PGRST204') return '[설정 오류] 서비스를 이용할 수 없습니다.';
-  if (err.code?.startsWith('23')) return '[데이터 오류] 요청한 작업을 수행할 수 없습니다.'; // 제약 조건 위반 등
-  if (err.code === '42P01') return '[시스템 오류] 서버 구성이 올바르지 않습니다.';
-
   return '[' + context + ' 실패] ' + (err.message || String(err));
 }
 
 export async function analyzeImageAction(base64Image: string, contentType: string, owner_name: string) {
   try {
     await verifySession(owner_name);
-    if (!getEnv('ANTHROPIC_API_KEY')) return { data: null, error: '분석 서버 설정(API 키)이 누락되었습니다.' };
-    const response = await getAnthropic().messages.create({
+    if (!ANTHROPIC_API_KEY) return { data: null, error: '분석 서버 설정(API 키)이 누락되었습니다.' };
+    const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-latest',
       max_tokens: 100,
       messages: [{
@@ -106,7 +107,7 @@ export async function verifyLibraryPasswordAction(ownerName: string, password: s
 
 export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, masterCode: string) {
   try {
-    if (masterCode !== getEnv('ADMIN_MASTER_CODE')) return { password: null, error: 'MASTER_CODE_INCORRECT' };
+    if (masterCode !== ADMIN_MASTER_CODE) return { password: null, error: 'MASTER_CODE_INCORRECT' };
     const { data, error } = await getSupabase().from('libraries').select('password').eq('owner_name', ownerName).single();
     if (error) throw error;
     return { password: data.password, error: null };
@@ -118,10 +119,10 @@ export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, 
 export async function searchBooksAction(query: string, owner_name: string, page: number = 1, size: number = 20) {
   try {
     await verifySession(owner_name, true);
-    if (!getEnv('KAKAO_REST_API_KEY')) return { data: null, error: '도서 검색 API 키가 누락되었습니다.' };
+    if (!KAKAO_REST_API_KEY) return { data: null, error: '도서 검색 API 키가 누락되었습니다.' };
     const res = await axios.get('https://dapi.kakao.com/v3/search/book', {
       params: { query, page, size },
-      headers: { Authorization: 'KakaoAK ' + getEnv('KAKAO_REST_API_KEY') },
+      headers: { Authorization: 'KakaoAK ' + KAKAO_REST_API_KEY },
       timeout: 5000
     });
     return { data: res.data.documents || [], meta: res.data.meta, error: null };
@@ -195,11 +196,11 @@ export async function deleteBooksAction(ids: number[], owner_name: string) {
 export async function searchLibrariesAction(region: string, dtl_region: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    if (!getEnv('LIBRARY_API_KEY')) return { data: null, error: '도서관 API 키가 누락되었습니다.' };
+    if (!LIBRARY_API_KEY) return { data: null, error: '도서관 API 키가 누락되었습니다.' };
 
     const fetchLibs = async (r: string, dtl: string) => {
       const response = await axios.get('http://data4library.kr/api/libSrch', {
-        params: { authKey: getEnv('LIBRARY_API_KEY'), format: 'json', pageSize: 100, region: r, ...(dtl ? { dtl_region: dtl } : {}) },
+        params: { authKey: LIBRARY_API_KEY, format: 'json', pageSize: 100, region: r, ...(dtl ? { dtl_region: dtl } : {}) },
         timeout: 5000
       });
       return response.data?.response?.libs || [];
@@ -242,9 +243,9 @@ export async function searchLibrariesAction(region: string, dtl_region: string, 
 export async function checkBookAvailabilityAction(isbn: string, libCode: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    if (!getEnv('LIBRARY_API_KEY')) return { data: null, error: '도서관 API 키 누락' };
+    if (!LIBRARY_API_KEY) return { data: null, error: '도서관 API 키 누락' };
     const res = await axios.get('http://data4library.kr/api/bookExist', {
-      params: { authKey: getEnv('LIBRARY_API_KEY'), libCode, isbn13: isbn, format: 'json' },
+      params: { authKey: LIBRARY_API_KEY, libCode, isbn13: isbn, format: 'json' },
       timeout: 5000
     });
     return { data: res.data?.response?.result || { hasBook: 'N' }, error: null };
@@ -256,11 +257,11 @@ export async function checkBookAvailabilityAction(isbn: string, libCode: string,
 export async function searchLibrariesByBookAction(isbn: string, region: string, dtl_region: string, owner_name: string) {
   try {
     await verifySession(owner_name, true);
-    if (!getEnv('LIBRARY_API_KEY')) return { data: null, error: '도서관 API 키 누락' };
+    if (!LIBRARY_API_KEY) return { data: null, error: '도서관 API 키 누락' };
 
     const fetchByBook = async (r: string, dtl: string) => {
       const response = await axios.get('http://data4library.kr/api/libSrchByBook', {
-        params: { authKey: getEnv('LIBRARY_API_KEY'), isbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
+        params: { authKey: LIBRARY_API_KEY, isbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
         timeout: 5000
       });
       return response.data?.response?.libs || [];
