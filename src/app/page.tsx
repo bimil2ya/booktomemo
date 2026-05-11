@@ -114,8 +114,8 @@ export default function Home() {
       setBooks(data || []);
       setHasMoreSearch(meta ? !meta.is_end : false);
     } catch (e) {
-      console.error('Search failed:', _error);
-      showToast(e instanceof Error ? _error.message : '도서 검색 실패', 'error');
+      console.error('Search failed:', e);
+      showToast(e instanceof Error ? e.message : '도서 검색 실패', 'error');
       setBooks([]); // 실패 시 기존 목록 초기화
     } finally {
       // 탭 전환 및 렌더링 배칭을 충분히 기다린 후 해제하여 버튼 멈춤 방지
@@ -189,7 +189,7 @@ export default function Home() {
       setSearchPage(nextPage);
       setHasMoreSearch(meta ? !meta.is_end : false);
     } catch (e) {
-      console.error('Load more failed:', _error);
+      console.error('Load more failed:', e);
       showToast('추가 검색 실패', 'error');
     } finally {
       loadingRef.current = false;
@@ -232,7 +232,7 @@ export default function Home() {
         setAvailabilityStatus({ status: 'error' });
       }
     } catch (e) {
-      console.error(_error);
+      console.error(e);
       setAvailabilityStatus({ status: 'error' });
     }
   }, [myPrimaryLib, selectedRegion, selectedSubRegion, libraryName]);
@@ -281,7 +281,7 @@ export default function Home() {
         showToast('책 정보 찾지 못함', 'info');
       }
     } catch (e) {
-      console.error('OCR Error:', _error);
+      console.error('OCR Error:', e);
       showToast('사진 인식 오류', 'error');
     } finally {
       setOcrLoading(false);
@@ -310,7 +310,7 @@ export default function Home() {
       refreshBooks();
     } catch (e) {
       removeBookOptimistic(tempId as number);
-      console.error('Save Error:', _error);
+      console.error('Save Error:', e);
       showToast('저장 실패', 'error');
     } finally {
       setSavingIsbn(null);
@@ -328,7 +328,7 @@ export default function Home() {
         await refreshBooks();
         showToast('삭제 오류: ' + error, 'error');
       }
-    } catch (e) {
+    } catch {
       await refreshBooks();
       showToast('네트워크 오류로 삭제 실패', 'error');
     }
@@ -347,7 +347,7 @@ export default function Home() {
         await refreshBooks();
         showToast('일부 삭제 실패: ' + error, 'error');
       }
-    } catch (e) {
+    } catch {
       await refreshBooks();
       showToast('네트워크 오류로 삭제 실패', 'error');
     }

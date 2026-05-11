@@ -69,7 +69,7 @@ const LibraryLogin: React.FC = () => {
         setError(error);
         setAvailableLibs([]);
       } else if (data) {
-        setAvailableLibs(data.map((item: any) => ({
+        setAvailableLibs(data.map((item: { lib: { libCode: string; libName: string; address: string; homepage: string } }) => ({
           libCode: item.lib.libCode,
           libName: item.lib.libName,
           address: item.lib.address,
