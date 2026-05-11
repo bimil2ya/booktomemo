@@ -70,13 +70,13 @@ const LibraryLogin: React.FC = () => {
         setAvailableLibs([]);
       } else if (data) {
         const sortedLibs = data
-          .map((item: { lib: { libCode: string; libName: string; address: string; homepage: string } }) => ({
+          .map((item: { lib: LibraryInfo }) => ({
             libCode: item.lib.libCode,
             libName: item.lib.libName,
             address: item.lib.address,
             homepage: item.lib.homepage
           }))
-          .sort((a, b) => a.libName.localeCompare(b.libName, 'ko'));
+          .sort((a: LibraryInfo, b: LibraryInfo) => a.libName.localeCompare(b.libName, 'ko'));
         setAvailableLibs(sortedLibs);
       }
     } catch {
