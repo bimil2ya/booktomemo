@@ -31,7 +31,7 @@ const LibraryLogin: React.FC = () => {
   const [availableLibs, setAvailableLibs] = useState<LibraryInfo[]>([]);
   const [searchLibLoading, setSearchLibLoading] = useState(false);
   const [fallbackMsg, setFallbackMsg] = useState<string | null>(null);
-  const lastFetchTime = useRef<number>(0);
+  
   
   // 마스터 코드/비밀번호 찾기 상태
   const [showMasterCodeInput, setShowMasterCodeInput] = useState(false);
@@ -69,7 +69,7 @@ const LibraryLogin: React.FC = () => {
         setError(error);
         setAvailableLibs([]);
       } else if (data) {
-        setAvailableLibs(data.map((item) => ({
+        setAvailableLibs(data.map((item: any) => ({
           libCode: item.lib.libCode,
           libName: item.lib.libName,
           address: item.lib.address,

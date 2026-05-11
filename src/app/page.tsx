@@ -113,9 +113,9 @@ export default function Home() {
       if (error) throw new Error(error);
       setBooks(data || []);
       setHasMoreSearch(meta ? !meta.is_end : false);
-    } catch (_error) {
+    } catch (e) {
       console.error('Search failed:', _error);
-      showToast(_error instanceof Error ? _error.message : '도서 검색 실패', 'error');
+      showToast(e instanceof Error ? _error.message : '도서 검색 실패', 'error');
       setBooks([]); // 실패 시 기존 목록 초기화
     } finally {
       // 탭 전환 및 렌더링 배칭을 충분히 기다린 후 해제하여 버튼 멈춤 방지
@@ -188,7 +188,7 @@ export default function Home() {
       setBooks(prev => [...prev, ...(data || [])]);
       setSearchPage(nextPage);
       setHasMoreSearch(meta ? !meta.is_end : false);
-    } catch (_error) {
+    } catch (e) {
       console.error('Load more failed:', _error);
       showToast('추가 검색 실패', 'error');
     } finally {
@@ -231,7 +231,7 @@ export default function Home() {
       } else {
         setAvailabilityStatus({ status: 'error' });
       }
-    } catch (_error) {
+    } catch (e) {
       console.error(_error);
       setAvailabilityStatus({ status: 'error' });
     }
@@ -280,7 +280,7 @@ export default function Home() {
       } else {
         showToast('책 정보 찾지 못함', 'info');
       }
-    } catch (_error) {
+    } catch (e) {
       console.error('OCR Error:', _error);
       showToast('사진 인식 오류', 'error');
     } finally {
@@ -308,7 +308,7 @@ export default function Home() {
       if (error) throw new Error(error);
       showToast('보관함 저장 완료');
       refreshBooks();
-    } catch (_error) {
+    } catch (e) {
       removeBookOptimistic(tempId as number);
       console.error('Save Error:', _error);
       showToast('저장 실패', 'error');
@@ -328,7 +328,7 @@ export default function Home() {
         await refreshBooks();
         showToast('삭제 오류: ' + error, 'error');
       }
-    } catch (_error) {
+    } catch (e) {
       await refreshBooks();
       showToast('네트워크 오류로 삭제 실패', 'error');
     }
@@ -347,7 +347,7 @@ export default function Home() {
         await refreshBooks();
         showToast('일부 삭제 실패: ' + error, 'error');
       }
-    } catch (_error) {
+    } catch (e) {
       await refreshBooks();
       showToast('네트워크 오류로 삭제 실패', 'error');
     }
