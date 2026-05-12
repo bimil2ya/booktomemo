@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import { cookies } from 'next/headers';
 
+import { normalizeIsbn } from '@/utils/isbn';
+
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -108,10 +110,11 @@ export async function getBooksAction(owner_name: string, sortColumn: string, sor
 export async function saveBookAction(book: { owner_name: string; isbn: string; title: string; authors: string; thumbnail: string; contents: string; publisher: string }) {
   try {
     await verifySession(book.owner_name);
-    const { data, error: checkError } = await getSupabase().from('books').select('id').eq('owner_name', book.owner_name).eq('isbn', book.isbn).maybeSingle();
+    const normalizedIsbn = normalizeIsbn(book.isbn);
+    const { data, error: checkError } = await getSupabase().from('books').select('id').eq('owner_name', book.owner_name).eq('isbn', normalizedIsbn).maybeSingle();
     if (checkError) throw checkError;
     if (data) return { success: false, error: 'ALREADY_EXISTS' };
-    const { error } = await getSupabase().from('books').insert([book]);
+    const { error } = await getSupabase().from('books').insert([{ ...book, isbn: normalizedIsbn }]);
     if (error) throw error;
     return { success: true, error: null };
   } catch (e) {
@@ -201,17 +204,63 @@ export async function searchLibrariesAction(region: string, dtl_region: string, 
   }
 }
 
-export async function checkBookAvailabilityAction(isbn: string, libCode: string, owner_name: string) {
+export async function checkBookAvailabilityAction(isbn: string, libCode: string, owner_name: string, title?: string) {
   try {
     await verifySession(owner_name, true);
     if (!process.env.LIBRARY_API_KEY) return { data: null, error: '도서관 API 키 누락' };
+    
+    const normalizedIsbn = normalizeIsbn(isbn);
+    
+    // 1차: ISBN 기반 확인 (가장 정확)
     const res = await axios.get('http://data4library.kr/api/bookExist', {
-      params: { authKey: process.env.LIBRARY_API_KEY, libCode, isbn13: isbn, format: 'json' },
+      params: { authKey: process.env.LIBRARY_API_KEY, libCode, isbn13: normalizedIsbn, format: 'json' },
       timeout: 5000
     });
-    return { data: res.data?.response?.result || { hasBook: 'N' }, error: null };
-  } catch {
-    return { data: null, error: '도서 대출 가능 여부 확인 실패' };
+    
+    let result = res.data?.response?.result;
+    
+    // 2차: ISBN 결과가 'N'이고 도서명이 제공된 경우 제목 기반으로 해당 도서관 내 검색 시도 (업데이트 지연 대비)
+    if ((!result || result.hasBook === 'N') && title) {
+      // 검색어 정규화: 특수문자(:, (, [ 등) 이후의 부제 제거 및 순수 제목만 추출
+      const cleanTitle = title.split(/[:(\[]/)[0].trim();
+      
+      const searchRes = await axios.get('http://data4library.kr/api/srchBooks', {
+        params: { 
+          authKey: process.env.LIBRARY_API_KEY, 
+          libCode, 
+          title: cleanTitle, 
+          exactMatch: 'true',
+          format: 'json',
+          pageSize: 1
+        },
+        timeout: 5000
+      });
+      
+      const foundBook = searchRes.data?.response?.docs?.[0]?.doc;
+      if (foundBook) {
+        // 검색된 책이 있다면 소장 중인 것으로 판단
+        result = { 
+          hasBook: 'Y', 
+          loanAvailable: foundBook.loanAvailable === 'N' ? 'N' : 'Y' 
+        };
+      }
+    }
+
+    return { data: result || { hasBook: 'N' }, error: null };
+  } catch (error: unknown) {
+    console.error('Availability Check Error:', error);
+    
+    let errorMsg = '도서관 정보를 불러오지 못했습니다.';
+    
+    if (axios.isAxiosError(error)) {
+      const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+      const isQuotaError = error.response?.data?.response?.error?.includes('500건 이상');
+      
+      if (isTimeout) errorMsg = '도서관 서버 응답이 지연되고 있습니다. (타임아웃)';
+      if (isQuotaError) errorMsg = '도서관 API 조회 한도가 초과되었습니다.';
+    }
+    
+    return { data: null, error: errorMsg };
   }
 }
 
@@ -220,9 +269,11 @@ export async function searchLibrariesByBookAction(isbn: string, region: string, 
     await verifySession(owner_name, true);
     if (!process.env.LIBRARY_API_KEY) return { data: null, error: '도서관 API 키 누락' };
 
+    const normalizedIsbn = normalizeIsbn(isbn);
+
     const fetchByBook = async (r: string, dtl: string) => {
       const response = await axios.get('http://data4library.kr/api/libSrchByBook', {
-        params: { authKey: process.env.LIBRARY_API_KEY, isbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
+        params: { authKey: process.env.LIBRARY_API_KEY, isbn: normalizedIsbn, region: r, ...(dtl ? { dtl_region: dtl } : {}), format: 'json' },
         timeout: 5000
       });
       const errorMsg = response.data?.response?.error;

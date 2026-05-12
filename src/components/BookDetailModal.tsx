@@ -138,48 +138,54 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                {availabilityStatus.status === 'available' && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-[11px] font-bold">
-                    <Check className="w-3.5 h-3.5" /> 지금 바로 빌릴 수 있어요!
-                  </div>
-                )}
-                {availabilityStatus.status === 'loaned' && (
-                  <div className="flex flex-col gap-2 w-full">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-[11px] font-bold w-fit">
-                      <X className="w-3.5 h-3.5" /> 현재 대출 중입니다.
+              <div className="flex flex-col gap-1.5 w-full">
+                <div className="flex items-center gap-3">
+                  {availabilityStatus.status === 'available' && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-[11px] font-bold">
+                      <Check className="w-3.5 h-3.5" /> 대출 가능할 것으로 보여요!
                     </div>
-                    {availabilityStatus.otherLibsInfo && (
-                      <div className="mt-1 px-1">
-                        <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                          💡 상호대차 추천: {availabilityStatus.otherLibsInfo}
-                        </p>
+                  )}
+                  {availabilityStatus.status === 'loaned' && (
+                    <div className="flex flex-col gap-2 w-full">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-[11px] font-bold w-fit">
+                        <X className="w-3.5 h-3.5" /> 현재 대출 중일 수 있어요.
                       </div>
-                    )}
-                  </div>
-                )}
-                {availabilityStatus.status === 'not_found' && (
-                  <div className="flex flex-col gap-2 w-full">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-xl text-[11px] font-bold w-fit">
-                      소장하고 있지 않습니다.
+                      {availabilityStatus.otherLibsInfo && (
+                        <div className="mt-1 px-1">
+                          <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                            💡 상호대차 추천: {availabilityStatus.otherLibsInfo}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    {availabilityStatus.otherLibsInfo ? (
-                      <div className="mt-1 px-1">
-                        <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                          💡 상호대차 가능 도서관: {availabilityStatus.otherLibsInfo}
-                        </p>
+                  )}
+                  {availabilityStatus.status === 'not_found' && (
+                    <div className="flex flex-col gap-2 w-full">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-xl text-[11px] font-bold w-fit">
+                        소장하고 있지 않습니다.
                       </div>
-                    ) : (
-                      <div className="mt-1 px-1">
-                        <p className="text-[9px] font-medium text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                          ※ 신규/통합 도서관은 국가 시스템 데이터 업데이트가 늦어질 수 있습니다. 정확한 현황은 위 [도서관 연결] 버튼을 통해 확인해 주세요.
-                        </p>
-                      </div>
-                    )}
+                      {availabilityStatus.otherLibsInfo && (
+                        <div className="mt-1 px-1">
+                          <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                            💡 상호대차 가능 도서관: {availabilityStatus.otherLibsInfo}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {availabilityStatus.status === 'error' && (
+                    <div className="flex flex-col gap-2 w-full">
+                      <div className="text-[10px] text-red-500 font-bold">도서관 시스템 응답이 지연되고 있습니다.</div>
+                      <p className="px-1 text-[9px] font-medium text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                        정확한 현황은 번거로우시더라도 위 [도서관 연결] 버튼을 통해 직접 확인해 주시기 바랍니다.
+                      </p>
+                    </div>
+                  )}
                   </div>
-                )}
-                {availabilityStatus.status === 'error' && (
-                  <div className="text-[10px] text-zinc-400 italic">정보를 불러올 수 없습니다.</div>
+
+                  {(availabilityStatus.status === 'available' || availabilityStatus.status === 'loaned' || availabilityStatus.status === 'not_found') && (                  <p className="px-1 text-[9px] font-medium text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                    ※ 도서관 사정에 따라 실제 상태와 다를 수 있습니다. 정확한 현황은 위 [도서관 연결] 버튼을 통해 확인해 주세요.
+                  </p>
                 )}
               </div>
             </div>

@@ -4,9 +4,12 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Library, Loader2, MapPin, Clock, X, Key, Eye, EyeOff, Info, User, Lock } from 'lucide-react';
 import { LibraryInfo } from '@/types';
 import { REGIONS, SUB_REGIONS } from '@/constants/regions';
-import { normalizeName } from '@/utils/helpers';
 import { useLibrary } from '@/context/LibraryContext';
 import { searchLibrariesAction, getLibraryPasswordWithMasterCodeAction } from '@/app/actions';
+
+const normalizeName = (name: string) => {
+  return name.replace(/\s*의\s*서재\s*$/, '').replace(/\s*의서재\s*$/, '').trim();
+};
 
 const LibraryLogin: React.FC = () => {
   const { 
@@ -32,6 +35,8 @@ const LibraryLogin: React.FC = () => {
   const [searchLibLoading, setSearchLibLoading] = useState(false);
   const [fallbackMsg, setFallbackMsg] = useState<string | null>(null);
   
+  // 도서관 목록 캐시 (지역 코드 조합을 키로 사용)
+  const libCache = useRef<Record<string, { libs: LibraryInfo[], fallback?: string | null }>>({});
   
   // 마스터 코드/비밀번호 찾기 상태
   const [showMasterCodeInput, setShowMasterCodeInput] = useState(false);
@@ -60,6 +65,15 @@ const LibraryLogin: React.FC = () => {
   // 도서관 목록 호출 (Throttling 적용: 초기 로드 이후 잦은 변경 방지)
   const lastRequestId = useRef(0);
   const fetchLibraries = useCallback(async () => {
+    const cacheKey = `${selectedRegion}_${selectedSubRegion}`;
+    
+    // 캐시 확인
+    if (libCache.current[cacheKey]) {
+      setAvailableLibs(libCache.current[cacheKey].libs);
+      setFallbackMsg(libCache.current[cacheKey].fallback || null);
+      return;
+    }
+
     const requestId = ++lastRequestId.current;
     setSearchLibLoading(true);
     setError(null);
@@ -85,6 +99,9 @@ const LibraryLogin: React.FC = () => {
             homepage: item.lib.homepage
           }))
           .sort((a: LibraryInfo, b: LibraryInfo) => a.libName.localeCompare(b.libName, 'ko'));
+        
+        // 캐시에 저장
+        libCache.current[cacheKey] = { libs: sortedLibs, fallback: fallbackInfo };
         setAvailableLibs(sortedLibs);
       }
     } catch {

@@ -1,16 +1,17 @@
 'use client';
 
 import React from 'react';
-import { LogOut } from 'lucide-react';
+import { LogOut, HelpCircle } from 'lucide-react';
 import { useLibrary } from '@/context/LibraryContext';
 
 interface LibraryHeaderProps {
   version: string;
   onTestConnection: () => void;
+  onOpenGuide: () => void;
 }
 
 const LibraryHeader: React.FC<LibraryHeaderProps> = ({
-  version, onTestConnection
+  version, onTestConnection, onOpenGuide
 }) => {
   const { libraryName, logout } = useLibrary();
 
@@ -36,7 +37,10 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
         )}
       </div>
       <div className="flex items-center gap-2 flex-none">
-        <button onClick={handleLogout} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
+        <button onClick={onOpenGuide} className="p-2 text-zinc-400 hover:text-purple-600 transition-colors" title="사용 가이드">
+          <HelpCircle className="w-4 h-4" />
+        </button>
+        <button onClick={handleLogout} className="p-2 text-zinc-400 hover:text-red-500 transition-colors" title="로그아웃">
           <LogOut className="w-4 h-4" />
         </button>
       </div>

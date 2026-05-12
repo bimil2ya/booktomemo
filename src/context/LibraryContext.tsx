@@ -10,8 +10,11 @@ import {
   verifyLibraryPasswordAction,
   createLibraryAction
 } from '@/app/actions';
-import { normalizeName } from '@/utils/helpers';
 import { useInfiniteQuery, useQueryClient, InfiniteData } from '@tanstack/react-query';
+
+const normalizeName = (name: string) => {
+  return name.replace(/\s*의\s*서재\s*$/, '').replace(/\s*의서재\s*$/, '').trim();
+};
 
 interface LibraryContextType {
   libraryName: string | null;
@@ -80,16 +83,15 @@ export function LibraryProvider({
       try {
         const res = await getBooksAction(libraryName, sortColumn, sortOrder, pageParam, PAGE_SIZE);
         if (res.error) {
-          if (res.error.includes('세션이 만료')) {
+          if (res.error.includes('세션이 만료') || res.error.includes('인증 세션')) {
+            // 즉시 로그아웃 대신 상태 유지를 위해 에러만 던지고 처리는 컴포넌트 레벨에서 유도할 수도 있으나, 
+            // 현재 구조에서는 안전을 위해 클린업 후 재로그인 유도가 최선입니다.
             logout();
           }
           throw new Error(res.error);
         }
         return res;
       } catch (e) {
-        if (e instanceof Error && e.message.includes('세션이 만료')) {
-          logout();
-        }
         throw e;
       }
     },
@@ -132,13 +134,31 @@ export function LibraryProvider({
     const savedSubRegion = localStorage.getItem('my_sub_region');
 
     if (savedLib) {
-      try { setMyPrimaryLib(JSON.parse(savedLib)); } catch (e) { console.error('Parse lib error', e); }
+      try { 
+        const parsed = JSON.parse(savedLib);
+        if (parsed && parsed.libCode) setMyPrimaryLib(parsed);
+        else throw new Error('Invalid lib data');
+      } catch (e) { 
+        console.error('Restore lib error, resetting to default', e);
+        setMyPrimaryLib({ libCode: '131557', libName: '남양주시 별빛도서관', address: '경기도 남양주시 별내중앙로 102', homepage: 'https://lib.nyj.go.kr/bnae' });
+      }
+    } else {
+      // 기본값: 남양주시 별빛도서관
+      setMyPrimaryLib({ libCode: '131557', libName: '남양주시 별빛도서관', address: '경기도 남양주시 별내중앙로 102', homepage: 'https://lib.nyj.go.kr/bnae' });
     }
+    
     if (savedRegion) setSelectedRegion(savedRegion);
-    if (savedSubRegion) setSelectedSubRegion(savedSubRegion);
+    else setSelectedRegion('31');
 
-    if (!savedLib && !initialLibraryName && !localStorage.getItem('library_owner_name')) {
-      setMyPrimaryLib({ libCode: '131557', libName: '남양주시 별빛도서관', address: '', homepage: 'https://lib.nyj.go.kr/bnae' });
+    if (savedSubRegion) setSelectedSubRegion(savedSubRegion);
+    else setSelectedSubRegion('31130');
+
+    // 히스토리 파싱 보호
+    try {
+      const history = localStorage.getItem('library_history');
+      if (history) JSON.parse(history); // 유효성 검사만 수행
+    } catch (e) {
+      localStorage.removeItem('library_history'); // 깨진 데이터 삭제
     }
 
     isInitialMount.current = false;

@@ -143,10 +143,12 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
                   {isEditing ? (
                     <input value={editFormData.authors || ''} onChange={e => setEditFormData({...editFormData, authors: e.target.value})} className='w-full px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-xs border-none focus:ring-1 focus:ring-purple-500' onClick={(e) => e.stopPropagation()} />
                   ) : (
-                    renderAuthors()
+                    book.authors ? renderAuthors() : <span className="text-zinc-400 text-[11px]">저자 정보 없음</span>
                   )}
                   <span className='text-zinc-300 dark:text-zinc-700'>·</span>
-                  <p className='text-zinc-400 text-[10px] truncate'>{book.publisher} · {new Date(book.created_at!).toLocaleDateString()}</p>
+                  <p className='text-zinc-400 text-[10px] truncate'>
+                    {book.publisher || '출판사 미상'} · {book.created_at ? new Date(book.created_at).toLocaleDateString() : '날짜 정보 없음'}
+                  </p>
                 </div>
             </div>
             

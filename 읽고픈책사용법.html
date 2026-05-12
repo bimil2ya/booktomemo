@@ -1,0 +1,229 @@
+     1 <!DOCTYPE html>
+     2 <html lang="ko">
+     3 <head>
+     4     <meta charset="UTF-8">
+     5     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     6     <title>[읽고픈 책들] 앱 사용 가이드</title>
+     7     <style>
+     8         :root {
+     9             --primary-color: #9333ea;
+    10             --bg-color: #fafafa;
+    11             --card-bg: #ffffff;
+    12             --text-main: #18181b;
+    13             --text-sub: #71717a;
+    14             --accent-bg: #f5f3ff;
+    15         }
+    16         body {
+    17             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    18             line-height: 1.6;
+    19             color: var(--text-main);
+    20             background-color: var(--bg-color);
+    21             margin: 0;
+    22             padding: 0;
+    23         }
+    24         .container {
+    25             max-width: 800px;
+    26             margin: 0 auto;
+    27             padding: 40px 20px;
+    28         }
+    29         header {
+    30             text-align: center;
+    31             margin-bottom: 60px;
+    32         }
+    33         h1 {
+    34             font-size: 2.5rem;
+    35             font-weight: 900;
+    36             color: var(--primary-color);
+    37             margin-bottom: 10px;
+    38         }
+    39         .intro-text {
+    40             color: var(--text-sub);
+    41             font-size: 1.1rem;
+    42         }
+    43         nav {
+    44             background: var(--card-bg);
+    45             padding: 25px;
+    46             border-radius: 20px;
+    47             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    48             margin-bottom: 40px;
+    49         }
+    50         nav h2 {
+    51             margin-top: 0;
+    52             font-size: 1.2rem;
+    53             border-bottom: 2px solid var(--accent-bg);
+    54             padding-bottom: 10px;
+    55         }
+    56         nav ul {
+    57             list-style: none;
+    58             padding: 0;
+    59             display: grid;
+    60             grid-template-columns: 1fr 1fr;
+    61             gap: 10px;
+    62         }
+    63         nav a {
+    64             text-decoration: none;
+    65             color: var(--text-main);
+    66             font-weight: 600;
+    67             font-size: 0.95rem;
+    68         }
+    69         nav a:hover {
+    70             color: var(--primary-color);
+    71         }
+    72         section {
+    73             background: var(--card-bg);
+    74             padding: 40px;
+    75             border-radius: 30px;
+    76             margin-bottom: 30px;
+    77             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    78         }
+    79         h2 {
+    80             font-size: 1.8rem;
+    81             border-left: 5px solid var(--primary-color);
+    82             padding-left: 15px;
+    83             margin-bottom: 25px;
+    84         }
+    85         h3 {
+    86             font-size: 1.3rem;
+    87             color: var(--primary-color);
+    88             margin-top: 30px;
+    89         }
+    90         .highlight {
+    91             background-color: #fef9c3;
+    92             padding: 2px 5px;
+    93             border-radius: 4px;
+    94             font-weight: bold;
+    95         }
+    96         .tip-box {
+    97             background-color: var(--accent-bg);
+    98             border-radius: 15px;
+    99             padding: 20px;
+   100             margin: 20px 0;
+   101             border: 1px dashed var(--primary-color);
+   102         }
+   103         .tip-box strong {
+   104             color: var(--primary-color);
+   105             display: block;
+   106             margin-bottom: 5px;
+   107         }
+   108         footer {
+   109             text-align: center;
+   110             padding: 40px;
+   111             color: var(--text-sub);
+   112             font-size: 0.9rem;
+   113         }
+   114         @media (max-width: 600px) {
+   115             nav ul { grid-template-columns: 1fr; }
+   116             section { padding: 25px; }
+   117         }
+   118     </style>
+   119 </head>
+   120 <body>
+   121
+   122 <div class="container">
+   123     <header>
+   124         <h1>읽고픈 책들</h1>
+   125         <p class="intro-text">도서 검색부터 서재 관리, 대출 현황까지 한 번에</p>
+   126     </header>
+   127
+   128     <nav>
+   129         <h2>목차</h2>
+   130         <ul>
+   131             <li><a href="#sec1">1. 시작하기</a></li>
+   132             <li><a href="#sec2">2. 도서 검색</a></li>
+   133             <li><a href="#sec3">3. 서재 관리 및 메모</a></li>
+   134             <li><a href="#sec4">4. 도서관 현황 확인</a></li>
+   135             <li><a href="#sec5">5. 모바일 설치(PWA)</a></li>
+   136             <li><a href="#sec6">6. 문제 해결</a></li>
+   137         </ul>
+   138     </nav>
+   139
+   140     <section id="sec1">
+   141         <h2>1. 시작하기</h2>
+   142         <h3>1.1 나만의 서재 만들기</h3>
+   143         <p>앱에 접속하여 사용할 '이름'과 '비밀번호'를 입력하는 것만으로 자신만의 독립된 서재 공간이 생성됩니다. 별도의
+       복잡한 가입 절차 없이 즉시 이용 가능합니다.</p>
+   144         
+   145         <h3>1.2 주 도서관 설정하기</h3>
+   146         <p>로그인 시 나타나는 <span class="highlight">내 동네 도서관 찾기</span> 메뉴에서 자주 이용하는 도서관을
+       선택하세요. 기본적으로 '남양주시 별빛도서관'이 추천되어 있습니다.</p>
+   147         <div class="tip-box">
+   148             <strong>주 도서관 설정의 의미</strong>
+   149             주 도서관을 설정하면 책을 검색할 때마다 해당 도서관의 <strong>실시간 대출 가능 여부</strong>를 자동으로
+       알려줍니다. 또한, 우리 도서관에 책이 없을 경우 <strong>같은 지역(시/군/구) 내 다른 도서관</strong>의 소장 현황까지
+       찾아주어 '상호대차' 이용을 돕습니다.
+   150         </div>
+   151     </section>
+   152
+   153     <section id="sec2">
+   154         <h2>2. 도서 검색 및 탐색</h2>
+   155         <h3>2.1 쉽고 빠른 검색</h3>
+   156         <p>상단 검색창에 책 제목이나 저자 이름을 입력하세요. 카카오 도서 데이터를 바탕으로 정확한 도서 정보를
+       불러옵니다.</p>
+   157         
+   158         <h3>2.2 결과 내 재검색</h3>
+   159         <p>검색 버튼 옆의 <span class="highlight">결과내 재검색</span> 체크박스를 선택하고 새로운 키워드를 입력하면,
+       이전 검색 결과 안에서 한 번 더 필터링하여 원하는 책을 더 정확하게 찾을 수 있습니다.</p>
+   160     </section>
+   161
+   162     <section id="sec3">
+   163         <h2>3. 나만의 서재 관리 및 메모 활용</h2>
+   164         <h3>3.1 보관함 담기</h3>
+   165         <p>검색 결과에서 마음에 드는 책의 '서재에 저장' 버튼을 누르세요. 저장된 책은 '내 서재' 탭에서 언제든 확인할 수
+       있습니다.</p>
+   166         
+   167         <h3>3.2 스마트 메모 및 검색 활용</h3>
+   168         <p>책마다 나만의 메모를 남길 수 있습니다. 이 메모는 단순히 기록을 넘어 <strong>분류 태그</strong> 역할을
+       합니다.</p>
+   169         <div class="tip-box">
+   170             <strong>메모 활용 시나리오 예시</strong>
+   171             <ul>
+   172                 <li><strong>모임 관리:</strong> 메모에 <span class="highlight">희우재</span>라고 적어두면, 나중에 서재
+       검색창에 '희우재'를 입력해 해당 모임의 선정 도서들만 모아볼 수 있습니다.</li>
+   173                 <li><strong>추천인 기록:</strong> <span class="highlight">간달프</span> 또는 <span
+       class="highlight">춘자고 추천</span>과 같이 적어두면, 누가 추천해준 책인지 잊지 않고 검색으로 불러낼 수 있습니다.</li>
+   174                 <li><strong>일정 기록:</strong> '5월 3째주 읽을 예정' 등을 기록하여 독서 계획을 관리하세요.</li>
+   175             </ul>
+   176         </div>
+   177     </section>
+   178
+   179     <section id="sec4">
+   180         <h2>4. 도서관 소장 정보 확인</h2>
+   181         <h3>4.1 대출 가능 여부 안내</h3>
+   182         <p>도서 상세 화면에서 주 도서관의 현황을 확인하세요.</p>
+   183         <ul>
+   184             <li><strong>대출 가능할 것으로 보여요:</strong> 도서관에 책이 비치되어 있는 상태입니다.</li>
+   185             <li><strong>현재 대출 중일 수 있어요:</strong> 이미 대출 중이거나 예약된 상태입니다.</li>
+   186         </ul>
+   187         
+   188         <h3>4.2 상호대차 및 도서관 연결</h3>
+   189         <p>주 도서관에 책이 없다면 같은 지역의 다른 도서관을 추천해 드립니다. <span class="highlight">도서관 연결</span>
+       버튼을 누르면 해당 도서관 홈페이지로 즉시 이동하여 실시간 예약을 진행할 수 있습니다.</p>
+   190     </section>
+   191
+   192     <section id="sec5">
+   193         <h2>5. 스마트한 이용 팁 (PWA)</h2>
+   194         <p>이 앱은 웹 브라우저뿐만 아니라 스마트폰 앱처럼 설치해서 사용할 수 있습니다.</p>
+   195         <h3>5.1 아이폰 (iOS)</h3>
+   196         <p>Safari에서 하단 공유 버튼 클릭 후 <strong>'홈 화면에 추가'</strong>를 선택하세요.</p>
+   197         <h3>5.2 갤럭시 (Android)</h3>
+   198         <p>크롬 또는 삼성 인터넷 브라우저 메뉴에서 <strong>'앱 설치'</strong> 또는 <strong>'홈 화면에 추가'</strong>를
+       선택하세요.</p>
+   199     </section>
+   200
+   201     <section id="sec6">
+   202         <h2>6. 자주 묻는 질문 (FAQ)</h2>
+   203         <p><strong>Q. 도서관 상태가 실제와 달라요.</strong><br>
+   204         A. 도서관 정보나루 API는 전일 기준 데이터를 제공하므로, 당일 발생한 대출/반납 건은 실시간으로 반영되지 않을 수
+       있습니다. 정확한 확인은 '도서관 연결' 버튼을 이용해 주세요.</p>
+   205         
+   206         <p><strong>Q. 비밀번호를 잊어버렸어요.</strong><br>
+   207         A. 관리자에게 문의하여 '마스터 코드'를 발급받으면 비밀번호를 즉시 조회할 수 있습니다.</p>
+   208     </section>
+   209
+   210     <footer>
+   211         <p>&copy; 2026 읽고픈 책들. All rights reserved.</p>
+   212     </footer>
+   213 </div>
+   214
+   215 </body>
+   216 </html>

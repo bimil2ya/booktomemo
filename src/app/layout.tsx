@@ -18,7 +18,8 @@ const geistMono = Geist_Mono({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 3, // 과도한 확대 방지를 위해 적절한 제한 유지
+  maximumScale: 1, // 자동 확대 방지를 위해 1로 고정
+  userScalable: false, // 사용자 임의 확대 제한
 };
 
 export const metadata: Metadata = {
@@ -26,8 +27,8 @@ export const metadata: Metadata = {
   description: "도서 검색 및 보관함",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: "/icon.png",
+    apple: "/icon.png",
   },
   appleWebApp: {
     capable: true,

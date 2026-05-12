@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Library, Trash2, List, LayoutGrid, ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { Library, Trash2, List, LayoutGrid, ChevronUp, ChevronDown, Search, X } from 'lucide-react';
 import { SortColumn, SortOrder } from '@/types';
 
 interface LibrarySortFiltersProps {
@@ -63,9 +63,18 @@ const LibrarySortFilters: React.FC<LibrarySortFiltersProps> = ({
           value={libSearchQuery}
           onChange={(e) => setLibSearchQuery(e.target.value)}
           placeholder="보관함에서 책 찾기 (제목, 저자, 메모...)"
-          className="w-full pl-10 pr-4 py-3 bg-zinc-100 dark:bg-zinc-800/50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-purple-500/50 transition-all"
+          className="w-full pl-10 pr-10 py-3 bg-zinc-100 dark:bg-zinc-800/50 border-none rounded-2xl text-base sm:text-sm focus:ring-2 focus:ring-purple-500/50 transition-all placeholder:text-sm"
         />
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 group-focus-within:text-purple-500 transition-colors" />
+        
+        {libSearchQuery && (
+          <button 
+            onClick={() => setLibSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
       
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-zinc-100 dark:border-zinc-800">

@@ -34,15 +34,19 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({
             )}
           </div>
           <div className="flex flex-wrap gap-x-1">
-            {book.authors.map((author, idx) => (
-              <span 
-                key={idx}
-                onClick={(e) => { e.stopPropagation(); onAuthorClick?.(author); }}
-                className="text-purple-600 text-[11px] font-bold hover:underline cursor-pointer"
-              >
-                {author}{idx < book.authors.length - 1 ? ',' : ''}
-              </span>
-            ))}
+            {book.authors && book.authors.length > 0 ? (
+              book.authors.map((author, idx) => (
+                <span 
+                  key={idx}
+                  onClick={(e) => { e.stopPropagation(); onAuthorClick?.(author); }}
+                  className="text-purple-600 text-[11px] font-bold hover:underline cursor-pointer"
+                >
+                  {author}{idx < book.authors.length - 1 ? ',' : ''}
+                </span>
+              ))
+            ) : (
+              <span className="text-zinc-400 text-[10px]">저자 정보 없음</span>
+            )}
           </div>
           <p className="text-zinc-400 text-[9px] truncate">{book.publisher}</p>
           <p className="text-zinc-500 text-[11px] line-clamp-1 leading-relaxed break-all">{book.contents}</p>

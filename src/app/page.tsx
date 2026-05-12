@@ -18,6 +18,7 @@ import { useToast } from '@/context/ToastContext';
 
 // 타입, 상수, 컴포넌트, 유틸 임포트
 import { Book, SavedBook, AvailabilityStatus } from '@/types';
+import { normalizeIsbn } from '@/utils/isbn';
 import LibraryLogin from '@/components/LibraryLogin';
 import LibraryHeader from '@/components/LibraryHeader';
 import BookSearchBar from '@/components/BookSearchBar';
@@ -25,6 +26,7 @@ import SearchResultCard from '@/components/SearchResultCard';
 import LibraryBookCard from '@/components/LibraryBookCard';
 import LibrarySortFilters from '@/components/LibrarySortFilters';
 import BookDetailModal from '@/components/BookDetailModal';
+import UsageGuideModal from '@/components/UsageGuideModal';
 import BottomNav from '@/components/BottomNav';
 import PWAInstallGuide from '@/components/PWAInstallGuide';
 import { BookCardSkeleton } from '@/components/Skeleton';
@@ -72,6 +74,8 @@ export default function Home() {
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus | null>(null);
   const [libSearchQuery, setLibSearchQuery] = useState('');
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<{ query: string; books: Book[]; totalCount: number; hasMore: boolean }[]>([]);
 
   const currentSelectedBook = useMemo(() => {
     if (selectedBookId) {
@@ -88,6 +92,16 @@ export default function Home() {
   const performSearch = useCallback(async (searchQuery: string, updateUrl = true) => {
     if (!searchQuery || searchQuery.trim() === '[' || loadingRef.current) return;
     
+    // 현재 상태를 히스토리에 저장 (동일한 검색어가 아닐 때만)
+    if (lastPerformedQuery && lastPerformedQuery !== searchQuery) {
+      setSearchHistory(prev => [{
+        query: lastPerformedQuery,
+        books: [...books],
+        totalCount: totalSearchCount,
+        hasMore: hasMoreSearch
+      }, ...prev].slice(0, 5)); // 최근 5개까지 저장
+    }
+
     loadingRef.current = true;
     setLoading(true);
     setSearchPage(1);
@@ -123,7 +137,7 @@ export default function Home() {
         setLoading(false);
       }, 150);
     }
-  }, [libraryName, showToast]);
+  }, [libraryName, showToast, lastPerformedQuery, books, totalSearchCount, hasMoreSearch]);
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,11 +155,27 @@ export default function Home() {
     await performSearch(searchQuery, updateUrl);
   }, [performSearch]);
 
+  const goBackSearch = useCallback(() => {
+    if (searchHistory.length === 0) return;
+    
+    const [last, ...rest] = searchHistory;
+    setQuery(last.query);
+    setLastPerformedQuery(last.query);
+    setBooks(last.books);
+    setTotalSearchCount(last.totalCount);
+    setHasMoreSearch(last.hasMore);
+    setSearchHistory(rest);
+    
+    // URL 업데이트
+    localStorage.setItem('last_search_query', last.query);
+    const newUrl = `${window.location.pathname}?q=${encodeURIComponent(last.query)}`;
+    window.history.replaceState({ path: newUrl }, '', newUrl);
+  }, [searchHistory]);
+
   useEffect(() => {
     // 버전 업데이트 체크 및 캐시 관리 기초 로직
     const lastVersion = localStorage.getItem('app_version');
     if (lastVersion !== VERSION) {
-      console.log(`Update detected: ${lastVersion} -> ${VERSION}`);
       localStorage.setItem('app_version', VERSION);
     }
 
@@ -158,7 +188,7 @@ export default function Home() {
     }
   }, [VERSION, performSearch, lastPerformedQuery]);
 
-  const savedIsbns = useMemo(() => new Set(savedBooks.map(b => b.isbn)), [savedBooks]);
+  const savedIsbns = useMemo(() => new Set(savedBooks.map(b => normalizeIsbn(b.isbn))), [savedBooks]);
 
   const filteredSavedBooks = useMemo(() => {
     if (!libSearchQuery.trim()) return savedBooks;
@@ -210,17 +240,17 @@ export default function Home() {
 
   const checkAvailability = useCallback(async (book: SavedBook | Book) => {
     if (!myPrimaryLib) return;
-    const isbn13 = book.isbn.split(' ').find(s => s.length === 13);
-    if (!isbn13) {
+    const normalizedIsbn = normalizeIsbn(book.isbn);
+    if (!normalizedIsbn) {
       setAvailabilityStatus({ status: 'error' });
       return;
     }
     setAvailabilityStatus({ status: 'loading' });
     try {
-      const { data: avail, error } = await checkBookAvailabilityAction(isbn13, myPrimaryLib.libCode, libraryName || '');
+      const { data: avail, error } = await checkBookAvailabilityAction(normalizedIsbn, myPrimaryLib.libCode, libraryName || '', book.title);
       if (error) throw new Error(error);
       if (avail?.hasBook === 'N') {
-        const { data: others, error: othersError } = await searchLibrariesByBookAction(isbn13, selectedRegion, selectedSubRegion, libraryName || '');
+        const { data: others, error: othersError } = await searchLibrariesByBookAction(normalizedIsbn, selectedRegion, selectedSubRegion, libraryName || '');
         if (othersError) throw othersError;
         let otherLibsInfo = '';
         if (others && others.length > 0 && others[0]?.lib?.libName) {
@@ -229,7 +259,7 @@ export default function Home() {
         }
         setAvailabilityStatus({ status: 'not_found', otherLibsInfo });
       } else if (avail?.loanAvailable === 'N') {
-        const { data: others, error: othersError } = await searchLibrariesByBookAction(isbn13, selectedRegion, selectedSubRegion, libraryName || '');
+        const { data: others, error: othersError } = await searchLibrariesByBookAction(normalizedIsbn, selectedRegion, selectedSubRegion, libraryName || '');
         if (othersError) throw othersError;
         let otherLibsInfo = '';
         if (others && others.length > 0 && others[0]?.lib?.libName) {
@@ -264,9 +294,10 @@ export default function Home() {
 
   const handleSave = async (book: Book) => {
     if (!libraryName) return;
+    const normalizedIsbn = normalizeIsbn(book.isbn);
     setSavingIsbn(book.isbn);
     const newBookData: SavedBook = {
-      isbn: book.isbn, title: book.title, authors: book.authors.join(', '),
+      isbn: normalizedIsbn, title: book.title, authors: book.authors.join(', '),
       thumbnail: book.thumbnail || '', contents: book.contents || '',
       publisher: book.publisher || '', owner_name: libraryName
     };
@@ -338,6 +369,7 @@ export default function Home() {
           if (error) showToast('서버 연결 실패', 'error');
           else showToast('서버 연결 양호');
         }}
+        onOpenGuide={() => setIsGuideOpen(true)}
       />
 
       <main className="max-w-4xl mx-auto">
@@ -350,15 +382,13 @@ export default function Home() {
               searchWithin={searchWithin}
               setSearchWithin={setSearchWithin}
               inputRef={searchInputRef}
+              lastPerformedQuery={lastPerformedQuery}
+              totalSearchCount={totalSearchCount}
+              onBack={goBackSearch}
+              canGoBack={searchHistory.length > 0}
             />
 
             <div className="grid gap-3 max-w-lg mx-auto">
-              {!loading && lastPerformedQuery && (
-                <div className="text-zinc-600 dark:text-zinc-400 text-xs px-1 py-2 leading-relaxed">
-                  요청하신 <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1 font-bold rounded">&apos;{lastPerformedQuery}&apos;</span> 에 대한 자료 검색 결과이며 총 <span className="text-purple-600 dark:text-purple-400 font-bold">{totalSearchCount.toLocaleString()}건</span>이 검색되었습니다.
-                </div>
-              )}
-
               {loading && books.length === 0 && (
                 <div className="grid gap-3">
                   {[...Array(5)].map((_, i) => <BookCardSkeleton key={i} />)}
@@ -371,7 +401,7 @@ export default function Home() {
                   onSelect={() => { setSelectedBook(book); setSelectedBookId(null); }}
                   onSave={handleSave} savingIsbn={savingIsbn}
                   onAuthorClick={handleAuthorClick}
-                  isSaved={savedIsbns.has(book.isbn)}
+                  isSaved={savedIsbns.has(normalizeIsbn(book.isbn))}
                 />
               ))}
               {!loading && query && books.length === 0 && lastPerformedQuery && (
@@ -435,6 +465,9 @@ export default function Home() {
       <PWAInstallGuide />
       {currentSelectedBook && (
         <BookDetailModal book={currentSelectedBook} onClose={() => { setSelectedBook(null); setSelectedBookId(null); }} myPrimaryLib={myPrimaryLib} availabilityStatus={availabilityStatus} onSave={handleSave} savingIsbn={savingIsbn} onAuthorClick={handleAuthorClick} />
+      )}
+      {isGuideOpen && (
+        <UsageGuideModal onClose={() => setIsGuideOpen(false)} />
       )}
     </div>
   );
