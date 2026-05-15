@@ -31,7 +31,7 @@ export interface LibApiResponse {
   lib: LibraryInfo;
 }
 
-export type SortColumn = 'created_at' | 'title' | 'authors' | 'publisher';
+export type SortColumn = 'created_at' | 'title' | 'authors';
 export type SortOrder = 'asc' | 'desc';
 
 export interface AvailabilityStatus {

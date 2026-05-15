@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { SavedBook } from '@/types';
 import BookThumbnail from './BookThumbnail';
 import { Trash2, Edit2, Check, X } from 'lucide-react';
@@ -14,24 +14,22 @@ interface LibraryBookCardProps {
   onDelete: (id: number) => void;
   selectedIds: number[];
   onToggleSelect: (id: number) => void;
-  swipingId: number | null;
-  setSwipingId: (id: number | null) => void;
-  touchStartX: React.MutableRefObject<number>;
   viewMode?: 'grid' | 'list';
   onAuthorClick?: (author: string) => void;
 }
 
 const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
   book, onSelect, onDelete,
-  selectedIds, onToggleSelect, swipingId, setSwipingId, touchStartX, viewMode = 'grid',
+  selectedIds, onToggleSelect, viewMode = 'grid',
   onAuthorClick
 }) => {
   const { libraryName, updateBookOptimistic } = useLibrary();
   const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<SavedBook>>({});
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStartX = useRef<number>(0);
 
-  const isSwiping = swipingId === book.id;
   const isSelected = selectedIds.includes(book.id!);
   const isGrid = viewMode === 'grid';
 
@@ -72,7 +70,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
     return (
       <div className="flex flex-wrap gap-x-1">
         {authors.map((author, idx) => (
-          <span 
+          <span
             key={idx}
             onClick={(e) => { e.stopPropagation(); onAuthorClick?.(author); }}
             className="text-purple-600 text-[11px] font-bold hover:underline cursor-pointer"
@@ -85,7 +83,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
   };
 
   return (
-    <div 
+    <div
       className={'relative overflow-hidden transition-all duration-300 ' + (isGrid ? 'mb-0' : 'mb-3')}
       onTouchStart={(e) => {
         touchStartX.current = e.touches[0].clientX;
@@ -93,20 +91,20 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
       onTouchMove={(e) => {
         const touchX = e.touches[0].clientX;
         const diff = touchStartX.current - touchX;
-        if (diff > 50) setSwipingId(book.id!);
-        if (diff < -50) setSwipingId(null);
+        if (diff > 50) setIsSwiping(true);
+        if (diff < -50) setIsSwiping(false);
       }}
     >
       {/* 밀어서 삭제 배경 */}
       <div className={'absolute inset-0 flex justify-end transition-opacity duration-300 ' + (isSwiping ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
         <div className='flex flex-col w-1/2 h-full'>
-          <button onClick={() => setSwipingId(null)} className='flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-sm'>취소</button>
-          <button onClick={() => { onDelete(book.id!); setSwipingId(null); }} className='flex-1 bg-red-500 text-white font-bold text-sm'>삭제</button>
+          <button onClick={() => setIsSwiping(false)} className='flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 font-bold text-sm'>취소</button>
+          <button onClick={() => { onDelete(book.id!); setIsSwiping(false); }} className='flex-1 bg-red-500 text-white font-bold text-sm'>삭제</button>
         </div>
       </div>
 
-      <div 
-        onClick={() => !isSwiping && !isEditing && onSelect()} 
+      <div
+        onClick={() => !isSwiping && !isEditing && onSelect()}
         className={'flex flex-col transition-transform duration-300 cursor-pointer overflow-hidden h-full ' + (isSwiping ? '-translate-x-1/2' : 'translate-x-0') + ' ' + (isGrid ? 'bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm rounded-3xl' : 'bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-zinc-100/50 dark:border-zinc-800/30')}
       >
         <div className={'flex gap-4 relative ' + (isGrid ? 'p-4' : 'py-4 px-5')}>
@@ -116,7 +114,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
               <BookThumbnail src={book.thumbnail} title={book.title} className='w-20 h-28 rounded-xl shadow-xs' />
             </div>
           )}
-          
+
           <div className='flex-1 min-w-0 flex flex-col justify-between overflow-hidden'>
             <div className='space-y-1.5 min-w-0'>
               <div className='flex items-start justify-between gap-3'>
@@ -127,7 +125,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
                     <h3 className={'font-bold text-zinc-900 dark:text-zinc-50 break-all leading-tight ' + (isGrid ? 'text-sm line-clamp-2' : 'text-base truncate')}>{book.title}</h3>
                   )}
                 </div>
-                
+
                 {/* 상단 액션 버튼 배치 */}
                 <div className='flex items-center gap-3 flex-none pt-0.5'>
                   {!isEditing && (
@@ -151,7 +149,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
                   </p>
                 </div>
             </div>
-            
+
             {/* 그리드형에서만 연필 버튼 노출 */}
             {isGrid && (
               <div className='flex items-center justify-end gap-1 mt-2'>

@@ -6,10 +6,7 @@ import { LibraryInfo } from '@/types';
 import { REGIONS, SUB_REGIONS } from '@/constants/regions';
 import { useLibrary } from '@/context/LibraryContext';
 import { searchLibrariesAction, getLibraryPasswordWithMasterCodeAction } from '@/app/actions';
-
-const normalizeName = (name: string) => {
-  return name.replace(/\s*의\s*서재\s*$/, '').replace(/\s*의서재\s*$/, '').trim();
-};
+import { normalizeName } from '@/utils/name';
 
 const LibraryLogin: React.FC = () => {
   const { 
@@ -22,7 +19,7 @@ const LibraryLogin: React.FC = () => {
   } = useLibrary();
 
   // 내부 폼 상태
-  const [nameInput, setNameInput] = useState('경호');
+  const [nameInput, setNameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isExistingLibrary, setIsExistingLibrary] = useState<boolean | null>(null);

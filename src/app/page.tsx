@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+
+const VERSION = "경호v2.5.0";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -66,8 +68,6 @@ export default function Home() {
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [swipingId, setSwipingId] = useState<number | null>(null);
-  const touchStartX = useRef<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   const [selectedBook, setSelectedBook] = useState<SavedBook | Book | null>(null);
@@ -84,35 +84,39 @@ export default function Home() {
     return selectedBook;
   }, [selectedBookId, savedBooks, selectedBook]);
 
-  const VERSION = "경호v2.5.0";
-
-
+  // performSearch 내부에서 최신 상태를 읽기 위한 ref (의존성 배열 안정화 목적)
+  const searchStateRef = useRef({ lastPerformedQuery: '', books: [] as Book[], totalSearchCount: 0, hasMoreSearch: false });
+  useEffect(() => {
+    searchStateRef.current = { lastPerformedQuery, books, totalSearchCount, hasMoreSearch };
+  }, [lastPerformedQuery, books, totalSearchCount, hasMoreSearch]);
 
   // 검색 로직 통합 및 경합 방지를 위한 핵심 함수
   const performSearch = useCallback(async (searchQuery: string, updateUrl = true) => {
     if (!searchQuery || searchQuery.trim() === '[' || loadingRef.current) return;
-    
+
+    const { lastPerformedQuery: prevQuery, books: prevBooks, totalSearchCount: prevCount, hasMoreSearch: prevHasMore } = searchStateRef.current;
+
     // 현재 상태를 히스토리에 저장 (동일한 검색어가 아닐 때만)
-    if (lastPerformedQuery && lastPerformedQuery !== searchQuery) {
+    if (prevQuery && prevQuery !== searchQuery) {
       setSearchHistory(prev => [{
-        query: lastPerformedQuery,
-        books: [...books],
-        totalCount: totalSearchCount,
-        hasMore: hasMoreSearch
-      }, ...prev].slice(0, 5)); // 최근 5개까지 저장
+        query: prevQuery,
+        books: [...prevBooks],
+        totalCount: prevCount,
+        hasMore: prevHasMore
+      }, ...prev].slice(0, 5));
     }
 
     loadingRef.current = true;
     setLoading(true);
     setSearchPage(1);
     setLastPerformedQuery(searchQuery);
-    
+
     // UI 최적화
     searchInputRef.current?.blur();
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    
+
     if (updateUrl) {
       localStorage.setItem('last_search_query', searchQuery);
       const newUrl = `${window.location.pathname}?q=${encodeURIComponent(searchQuery)}`;
@@ -128,7 +132,7 @@ export default function Home() {
     } catch (e) {
       console.error('Search failed:', e);
       showToast(e instanceof Error ? e.message : '도서 검색 실패', 'error');
-      setBooks([]); // 실패 시 기존 목록 초기화
+      setBooks([]);
       setTotalSearchCount(0);
     } finally {
       // 탭 전환 및 렌더링 배칭을 충분히 기다린 후 해제하여 버튼 멈춤 방지
@@ -137,23 +141,19 @@ export default function Home() {
         setLoading(false);
       }, 150);
     }
-  }, [libraryName, showToast, lastPerformedQuery, books, totalSearchCount, hasMoreSearch]);
+  }, [libraryName, showToast]);
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
 
     let finalQuery = query.trim();
-    if (searchWithin && lastPerformedQuery) {
-      finalQuery = `${lastPerformedQuery} ${finalQuery}`;
+    if (searchWithin && searchStateRef.current.lastPerformedQuery) {
+      finalQuery = `${searchStateRef.current.lastPerformedQuery} ${finalQuery}`;
       setQuery(finalQuery);
     }
     await performSearch(finalQuery);
-  }, [query, searchWithin, lastPerformedQuery, performSearch]);
-
-  const searchBooks = useCallback(async (searchQuery: string, updateUrl = true) => {
-    await performSearch(searchQuery, updateUrl);
-  }, [performSearch]);
+  }, [query, searchWithin, performSearch]);
 
   const goBackSearch = useCallback(() => {
     if (searchHistory.length === 0) return;
@@ -179,14 +179,15 @@ export default function Home() {
       localStorage.setItem('app_version', VERSION);
     }
 
-    // 초기 마운트 시 URL 쿼리 파라미터 처리 (중복 호출 방지 위해 딱 한 번만 실행)
+    // 초기 마운트 시 URL 쿼리 파라미터 처리 (딱 한 번만 실행)
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
-    if (q && q !== '' && q !== '[' && !lastPerformedQuery && !loadingRef.current) {
+    if (q && q !== '' && q !== '[' && !searchStateRef.current.lastPerformedQuery && !loadingRef.current) {
       setQuery(q);
       performSearch(q, false);
     }
-  }, [VERSION, performSearch, lastPerformedQuery]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const savedIsbns = useMemo(() => new Set(savedBooks.map(b => normalizeIsbn(b.isbn))), [savedBooks]);
 
@@ -277,15 +278,6 @@ export default function Home() {
       setAvailabilityStatus({ status: 'error' });
     }
   }, [myPrimaryLib, selectedRegion, selectedSubRegion, libraryName]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get('q');
-    if (q && q !== '' && q !== '[') {
-      setQuery(q);
-      searchBooks(q, false);
-    }
-  }, [searchBooks]);
 
   useEffect(() => {
     if (currentSelectedBook) checkAvailability(currentSelectedBook);
@@ -439,11 +431,11 @@ export default function Home() {
             ) : (
               <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
                 {filteredSavedBooks.map((book) => (
-                  <LibraryBookCard 
+                  <LibraryBookCard
                     key={book.id} book={book} onSelect={() => { setSelectedBook(book); setSelectedBookId(book.id || null); }}
-                    onDelete={deleteSavedBook} selectedIds={selectedIds} 
+                    onDelete={deleteSavedBook} selectedIds={selectedIds}
                     onToggleSelect={(id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])}
-                    swipingId={swipingId} setSwipingId={setSwipingId} touchStartX={touchStartX} viewMode={viewMode} onAuthorClick={handleAuthorClick}
+                    viewMode={viewMode} onAuthorClick={handleAuthorClick}
                   />
                 ))}
               </div>

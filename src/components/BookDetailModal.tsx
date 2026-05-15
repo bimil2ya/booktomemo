@@ -60,11 +60,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const firstAuthor = Array.isArray(book.authors) ? book.authors[0] : book.authors.split(',')[0];
   const searchQuery = `${book.title} ${firstAuthor || ''}`.trim();
   const kyoboUrl = `https://search.kyobobook.co.kr/search?keyword=${encodeURIComponent(searchQuery)}`;
-  
-  // 도서관 연결 URL (공식 홈페이지로 단순 연결)
-  const getLibSearchUrl = () => {
-    return myPrimaryLib?.homepage || '';
-  };
+  const libUrl = myPrimaryLib?.homepage || '';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all" onClick={onClose}>
@@ -128,7 +124,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="flex items-center gap-2 flex-none">
                   {availabilityStatus.status === 'loading' && <Loader2 className="w-3 h-3 text-purple-500 animate-spin" />}
                   <a 
-                    href={getLibSearchUrl()}
+                    href={libUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[10px] font-bold text-zinc-500 hover:text-purple-600 hover:border-purple-200 transition-all shadow-sm"

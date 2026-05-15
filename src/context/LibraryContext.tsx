@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { SavedBook, SortColumn, SortOrder, LibraryInfo } from '@/types';
+import { normalizeName } from '@/utils/name';
 import { 
   getBooksAction, 
   setLibraryCookieAction, 
@@ -12,9 +13,6 @@ import {
 } from '@/app/actions';
 import { useInfiniteQuery, useQueryClient, InfiniteData } from '@tanstack/react-query';
 
-const normalizeName = (name: string) => {
-  return name.replace(/\s*의\s*서재\s*$/, '').replace(/\s*의서재\s*$/, '').trim();
-};
 
 interface LibraryContextType {
   libraryName: string | null;
@@ -71,6 +69,7 @@ export function LibraryProvider({
   // React Query - Infinite Query for Books
   const {
     data,
+    error: queryError,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -80,20 +79,9 @@ export function LibraryProvider({
     queryKey: ['books', libraryName, sortColumn, sortOrder],
     queryFn: async ({ pageParam = 1 }) => {
       if (!libraryName) return { data: [], totalCount: 0 };
-      try {
-        const res = await getBooksAction(libraryName, sortColumn, sortOrder, pageParam, PAGE_SIZE);
-        if (res.error) {
-          if (res.error.includes('세션이 만료') || res.error.includes('인증 세션')) {
-            // 즉시 로그아웃 대신 상태 유지를 위해 에러만 던지고 처리는 컴포넌트 레벨에서 유도할 수도 있으나, 
-            // 현재 구조에서는 안전을 위해 클린업 후 재로그인 유도가 최선입니다.
-            logout();
-          }
-          throw new Error(res.error);
-        }
-        return res;
-      } catch (e) {
-        throw e;
-      }
+      const res = await getBooksAction(libraryName, sortColumn, sortOrder, pageParam, PAGE_SIZE);
+      if (res.error) throw new Error(res.error);
+      return res;
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -222,6 +210,16 @@ export function LibraryProvider({
     
     await clearLibraryCookieAction();
   }, [queryClient]);
+
+  // 세션 만료 감지: queryFn 밖에서 처리하여 React Query 순수성 유지
+  useEffect(() => {
+    if (queryError instanceof Error) {
+      const msg = queryError.message;
+      if (msg.includes('세션이 만료') || msg.includes('인증 세션')) {
+        logout();
+      }
+    }
+  }, [queryError, logout]);
 
   const updatePrimaryLib = useCallback((lib: LibraryInfo, region: string, subRegion: string) => {
     setMyPrimaryLib(lib);
