@@ -265,7 +265,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
           {libraryName === '경호' && (
             <a 
-              href={`https://z-library.sk/s/${book.isbn}`}
+              href={`https://z-library.sk/s/${encodeURIComponent(book.title)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-3 bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all group"
@@ -274,7 +274,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <div className="w-5 h-5 bg-white dark:bg-zinc-700 rounded-full flex items-center justify-center p-1 group-hover:scale-110 transition-transform shadow-sm text-zinc-600 dark:text-zinc-300">
                   <BookOpen className="w-full h-full" />
                 </div>
-                <span className="tracking-tight">Z-Library에서 찾기</span>
+                <span className="tracking-tight">Z-Library에서 &apos;{book.title}&apos; 찾기</span>
               </div>
             </a>
           )}
