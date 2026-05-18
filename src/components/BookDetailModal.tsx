@@ -62,6 +62,14 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const kyoboUrl = `https://search.kyobobook.co.kr/search?keyword=${encodeURIComponent(searchQuery)}`;
   const libUrl = myPrimaryLib?.homepage || '';
 
+  // 관리자 권한 체크 로직 (공백 무시)
+  const isAdmin = () => {
+    if (!libraryName) return false;
+    const cleanName = libraryName.replace(/\s+/g, '');
+    const allowedAdmins = ['경호', '노경호', '건주', '김건주'];
+    return allowedAdmins.includes(cleanName);
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all" onClick={onClose}>
       <div className="bg-white dark:bg-zinc-900 w-full max-w-lg max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
@@ -263,7 +271,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
             </div>
           </a>
 
-          {libraryName === '경호' && (
+          {isAdmin() && (
             <a 
               href={`https://ko.z-library.sk/s/${encodeURIComponent(book.title)}`}
               target="_blank"
