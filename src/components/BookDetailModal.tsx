@@ -265,7 +265,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
           {libraryName === '경호' && (
             <a 
-              href={`https://z-library.sk/s/${encodeURIComponent(book.title)}`}
+              href={`https://ko.z-library.sk/s/${encodeURIComponent(book.title)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-3 bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all group"
