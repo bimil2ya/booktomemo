@@ -91,7 +91,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
       if (error) throw new Error(error);
     } catch {
       updateBookOptimistic(book.id!, originalData);
-      showToast('수정 중 오류가 발생했습니다. 원래대로 복구합니다.', 'error');
+      showToast('수정 실패 — 원래대로 복구했습니다', 'error');
     }
   };
 

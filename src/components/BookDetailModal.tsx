@@ -50,7 +50,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
     } catch {
       // Rollback
       updateBookOptimistic(book.id, { personal_memo: originalMemo });
-      showToast('메모 저장에 실패했습니다.', 'error');
+      showToast('메모 저장 실패 — 잠시 후 다시 시도해 주세요', 'error');
     } finally {
       setIsSaving(false);
     }

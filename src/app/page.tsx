@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.6.6";
+const VERSION = "경호v2.6.7";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -140,7 +140,7 @@ export default function Home() {
       setHasMoreSearch(meta ? !meta.is_end : false);
     } catch (e) {
       console.error('Search failed:', e);
-      showToast(e instanceof Error ? e.message : '도서 검색 실패', 'error');
+      showToast('도서 검색 실패 — 잠시 후 다시 시도해 주세요', 'error');
       setBooks([]);
       setTotalSearchCount(0);
       setHasMoreSearch(false); // Bug 3 fix: 실패 시 "더 보기" 버튼 숨김
@@ -288,7 +288,7 @@ export default function Home() {
       setHasMoreSearch(meta ? !meta.is_end : false);
     } catch (e) {
       console.error('Load more failed:', e);
-      showToast('추가 검색 실패', 'error');
+      showToast('검색 실패 — 잠시 후 다시 시도해 주세요', 'error');
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -355,7 +355,7 @@ export default function Home() {
       const { error } = await saveBookAction(newBookData);
       if (error === 'ALREADY_EXISTS') {
         removeBookOptimistic(tempId as number);
-        showToast('이미 저장된 책', 'info');
+        showToast('이미 보관함에 있는 책입니다', 'info');
         return;
       }
       if (error) throw new Error(error);
@@ -364,7 +364,7 @@ export default function Home() {
     } catch (e) {
       removeBookOptimistic(tempId as number);
       console.error('Save Error:', e);
-      showToast('저장 실패', 'error');
+      showToast('저장 실패 — 잠시 후 다시 시도해 주세요', 'error');
     } finally {
       setSavingIsbn(null);
     }
@@ -379,11 +379,11 @@ export default function Home() {
       const { error } = await deleteBookAction(id, libraryName as string);
       if (error) {
         await refreshBooks();
-        showToast('삭제 오류: ' + error, 'error');
+        showToast('삭제 실패 — 잠시 후 다시 시도해 주세요', 'error');
       }
     } catch {
       await refreshBooks();
-      showToast('네트워크 오류로 삭제 실패', 'error');
+      showToast('삭제 실패 — 네트워크를 확인해 주세요', 'error');
     }
   };
 
@@ -398,11 +398,11 @@ export default function Home() {
       const { error } = await deleteBooksAction(idsToDelete, libraryName as string);
       if (error) {
         await refreshBooks();
-        showToast('일부 삭제 실패: ' + error, 'error');
+        showToast('일부 삭제 실패 — 잠시 후 다시 시도해 주세요', 'error');
       }
     } catch {
       await refreshBooks();
-      showToast('네트워크 오류로 삭제 실패', 'error');
+      showToast('삭제 실패 — 네트워크를 확인해 주세요', 'error');
     }
   };
 
