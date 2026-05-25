@@ -77,15 +77,12 @@ export async function getLibraryPasswordWithMasterCodeAction(ownerName: string, 
   }
 }
 
-export async function searchBooksAction(
-  query: string, owner_name: string, page: number = 1, size: number = 20,
-  target?: 'title' | 'isbn' | 'publisher' | 'person'
-) {
+export async function searchBooksAction(query: string, owner_name: string, page: number = 1, size: number = 20) {
   try {
     await verifySession(owner_name, true);
     if (!process.env.KAKAO_REST_API_KEY) return { data: null, error: '도서 검색 API 키가 누락되었습니다.' };
     const res = await axios.get('https://dapi.kakao.com/v3/search/book', {
-      params: { query, page, size, ...(target ? { target } : {}) },
+      params: { query, page, size },
       headers: { Authorization: 'KakaoAK ' + process.env.KAKAO_REST_API_KEY },
       timeout: 5000
     });
