@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.6.7";
+const VERSION = "경호v2.6.8";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -230,9 +230,17 @@ export default function Home() {
 
     debounceTimerRef.current = setTimeout(async () => {
       try {
-        const { data, meta, error } = await searchBooksAction(value.trim(), libraryName || '', 1, 6);
+        // 자동완성은 제목 검색만 (target:'title') — 내용·저자 매칭 노이즈 제거
+        const { data, meta, error } = await searchBooksAction(value.trim(), libraryName || '', 1, 6, 'title');
         if (!error && data) {
-          setSuggestions(data);
+          // 제목이 검색어로 시작하는 책을 앞으로 정렬 (나머지는 API 반환 순서 유지)
+          const q = value.trim().toLowerCase();
+          const sorted = [...data].sort((a, b) => {
+            const aPrefix = a.title.toLowerCase().startsWith(q) ? 0 : 1;
+            const bPrefix = b.title.toLowerCase().startsWith(q) ? 0 : 1;
+            return aPrefix - bPrefix;
+          });
+          setSuggestions(sorted);
           setSuggestionsTotal(meta?.pageable_count || 0);
         } else {
           setSuggestions([]);
