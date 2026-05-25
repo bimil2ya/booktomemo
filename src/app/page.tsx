@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.6.4";
+const VERSION = "경호v2.6.5";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -143,6 +143,7 @@ export default function Home() {
       showToast(e instanceof Error ? e.message : '도서 검색 실패', 'error');
       setBooks([]);
       setTotalSearchCount(0);
+      setHasMoreSearch(false); // Bug 3 fix: 실패 시 "더 보기" 버튼 숨김
     } finally {
       // 탭 전환 및 렌더링 배칭을 충분히 기다린 후 해제하여 버튼 멈춤 방지
       setTimeout(() => {

@@ -213,20 +213,26 @@ export function LibraryProvider({
   const setLibrary = useCallback(async (name: string, primaryLib?: LibraryInfo) => {
     const finalName = normalizeName(name);
     setLibraryName(finalName);
-    localStorage.setItem('library_owner_name', finalName);
+    try { localStorage.setItem('library_owner_name', finalName); } catch { /* Safari 개인정보 모드 등 쓰기 불가 시 무시 */ }
     await setLibraryCookieAction(finalName);
 
     if (primaryLib) {
       setMyPrimaryLib(primaryLib);
-      localStorage.setItem('my_primary_lib', JSON.stringify(primaryLib));
-      localStorage.setItem('my_region', selectedRegion);
-      localStorage.setItem('my_sub_region', selectedSubRegion);
+      try {
+        localStorage.setItem('my_primary_lib', JSON.stringify(primaryLib));
+        localStorage.setItem('my_region', selectedRegion);
+        localStorage.setItem('my_sub_region', selectedSubRegion);
+      } catch { /* QuotaExceededError 등 무시 */ }
     }
 
-    const history = localStorage.getItem('library_history');
-    const parsedHistory: string[] = history ? JSON.parse(history) : [];
+    // Bug 1 fix: JSON.parse 실패(깨진 데이터) 시 빈 배열로 폴백
+    let parsedHistory: string[] = [];
+    try {
+      const history = localStorage.getItem('library_history');
+      parsedHistory = history ? JSON.parse(history) : [];
+    } catch { /* 깨진 JSON 무시 → 빈 배열로 초기화 */ }
     const newHistory = [finalName, ...parsedHistory.filter(h => h !== finalName)].slice(0, 5);
-    localStorage.setItem('library_history', JSON.stringify(newHistory));
+    try { localStorage.setItem('library_history', JSON.stringify(newHistory)); } catch { /* 무시 */ }
   }, [selectedRegion, selectedSubRegion]);
 
   const checkExists = useCallback(async (name: string) => {

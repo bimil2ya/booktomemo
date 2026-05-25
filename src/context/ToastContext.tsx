@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -19,14 +19,19 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Bug 4 fix: 타이머 참조 보관 → 새 토스트가 오면 기존 타이머 취소하여 누적 방지
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     const id = Date.now();
+    // 기존 타이머 취소 (이전 자동 제거가 새 토스트를 잘못 지우는 상황 방지)
+    if (timerRef.current) clearTimeout(timerRef.current);
     // 새로운 토스트가 오면 기존 목록을 비워 겹침 방지
     setToasts([{ id, message, type }]);
-    
-    setTimeout(() => {
+
+    timerRef.current = setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
+      timerRef.current = null;
     }, 3000);
   }, []);
 
