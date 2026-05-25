@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { SavedBook } from '@/types';
 import BookThumbnail from './BookThumbnail';
-import { Trash2, Edit2, Check, X, BookOpen, BookCheck } from 'lucide-react';
+import { Trash2, Edit2, Check, X, BookOpen, BookCheck, Calendar } from 'lucide-react';
 import { updateBookAction } from '@/app/actions';
 import { useLibrary } from '@/context/LibraryContext';
 import { useToast } from '@/context/ToastContext';
@@ -28,11 +28,31 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<SavedBook>>({});
   const [isSwiping, setIsSwiping] = useState(false);
+  const [isEditingDate, setIsEditingDate] = useState(false);
   const touchStartX = useRef<number>(0);
 
   const isSelected = selectedIds.includes(book.id!);
   const isGrid = viewMode === 'grid';
   const isRead = !!book.read_at;
+
+  // ISO 날짜 → YYYY-MM-DD (input[type=date] 용, 로컬 시간 기준)
+  const isoToLocalDate = (iso: string): string => {
+    const d = new Date(iso);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, '0'),
+      String(d.getDate()).padStart(2, '0')
+    ].join('-');
+  };
+
+  const handleDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const dateValue = e.target.value; // YYYY-MM-DD
+    if (!dateValue || !book.id || book.id < 0) return;
+    setIsEditingDate(false);
+    const isoDate = new Date(dateValue + 'T00:00:00').toISOString();
+    await markBookAsRead(book.id, true, isoDate);
+    showToast(`${new Date(isoDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}으로 날짜를 변경했습니다`);
+  };
 
   const handleToggleRead = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -169,14 +189,39 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
             {/* 그리드형에서만 연필 버튼 + 읽음 버튼 노출 */}
             {isGrid && (
               <div className='flex items-center justify-between gap-1 mt-2'>
-                {/* 읽음 토글 버튼 */}
-                <button
-                  onClick={handleToggleRead}
-                  className={'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ' + (isRead ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700')}
-                >
-                  {isRead ? <BookCheck className='w-3.5 h-3.5' /> : <BookOpen className='w-3.5 h-3.5' />}
-                  {isRead ? (book.read_at ? new Date(book.read_at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 읽음' : '읽음') : '읽음 표시'}
-                </button>
+                <div className='flex items-center gap-1'>
+                  {/* 읽음 토글 버튼 / 날짜 수정 입력 */}
+                  {isEditingDate ? (
+                    <input
+                      type="date"
+                      defaultValue={book.read_at ? isoToLocalDate(book.read_at) : new Date().toISOString().split('T')[0]}
+                      max={new Date().toISOString().split('T')[0]}
+                      onChange={handleDateChange}
+                      onBlur={() => setIsEditingDate(false)}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                      className='px-2 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-none focus:ring-1 focus:ring-emerald-400 cursor-pointer'
+                    />
+                  ) : (
+                    <button
+                      onClick={handleToggleRead}
+                      className={'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ' + (isRead ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700')}
+                    >
+                      {isRead ? <BookCheck className='w-3.5 h-3.5' /> : <BookOpen className='w-3.5 h-3.5' />}
+                      {isRead ? (book.read_at ? new Date(book.read_at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 읽음' : '읽음') : '읽음 표시'}
+                    </button>
+                  )}
+                  {/* 날짜 수정 달력 버튼: 읽은 상태이고 편집 중이 아닐 때만 */}
+                  {isRead && !isEditingDate && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setIsEditingDate(true); }}
+                      className='p-1.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-lg transition-colors'
+                      title='읽은 날짜 수정'
+                    >
+                      <Calendar className='w-3 h-3' />
+                    </button>
+                  )}
+                </div>
                 {/* 편집 버튼 */}
                 {isEditing ? (
                   <div className='flex gap-1'>

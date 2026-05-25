@@ -41,8 +41,8 @@ interface LibraryContextType {
   removeBookOptimistic: (bookId: number) => void;
   updateBookOptimistic: (bookId: number, data: Partial<SavedBook>) => void;
 
-  // 읽음 상태 토글
-  markBookAsRead: (bookId: number, isRead: boolean) => Promise<void>;
+  // 읽음 상태 토글 (customReadAt 전달 시 해당 날짜로 기록, 없으면 현재 시각)
+  markBookAsRead: (bookId: number, isRead: boolean, customReadAt?: string | null) => Promise<void>;
   // DB에 read_at 컬럼이 존재하는지 여부 (null=아직 모름)
   dbSyncAvailable: boolean | null;
 
@@ -373,9 +373,9 @@ export function LibraryProvider({
     });
   }, [queryClient, libraryName, sortColumn, sortOrder]);
 
-  const markBookAsRead = useCallback(async (bookId: number, isRead: boolean) => {
-    // 호출 측에서 타임스탬프를 생성하여 localStorage와 DB의 값을 일치시킴
-    const newReadAt = isRead ? new Date().toISOString() : null;
+  const markBookAsRead = useCallback(async (bookId: number, isRead: boolean, customReadAt?: string | null) => {
+    // customReadAt이 주어지면 해당 날짜, 없으면 현재 시각으로 기록
+    const newReadAt = isRead ? (customReadAt ?? new Date().toISOString()) : null;
 
     // 1) localStorage 즉시 업데이트 (낙관적 UI)
     setReadDates(prev => {
