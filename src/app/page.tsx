@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.5.8";
+const VERSION = "경호v2.5.9";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -50,7 +50,8 @@ export default function Home() {
     isFetchingNextPage,
     sortColumn,
     sortOrder,
-    setSort
+    setSort,
+    dbSyncAvailable
   } = useLibrary();
   const { showToast } = useToast();
 
@@ -423,6 +424,7 @@ export default function Home() {
           <StatsTab
             savedBooks={savedBooks}
             onSelectBook={(book) => { setSelectedBook(book); setSelectedBookId(book.id || null); }}
+            dbSyncAvailable={dbSyncAvailable}
           />
         ) : activeTab === 'search' ? (
           <div className="space-y-8 px-4">

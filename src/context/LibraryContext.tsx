@@ -34,7 +34,7 @@ interface LibraryContextType {
   loadMoreBooks: () => Promise<void>;
 
   checkExists: (name: string) => Promise<{ exists: boolean; error: string | null }>;
-  
+
   // v1.8.5 Optimistic Actions
   addBookOptimistic: (book: SavedBook) => number | string;
   removeBookOptimistic: (bookId: number) => void;
@@ -42,7 +42,9 @@ interface LibraryContextType {
 
   // 읽음 상태 토글
   markBookAsRead: (bookId: number, isRead: boolean) => Promise<void>;
-  
+  // DB에 read_at 컬럼이 존재하는지 여부 (null=아직 모름)
+  dbSyncAvailable: boolean | null;
+
   // Sorting state for React Query key
   sortColumn: SortColumn;
   sortOrder: SortOrder;
@@ -69,6 +71,8 @@ export function LibraryProvider({
 
   // 읽음 상태 localStorage 캐시: { [bookId]: isoDateString }
   const [readDates, setReadDates] = useState<Record<number, string>>({});
+  // DB read_at 컬럼 존재 여부 (null=아직 감지 전, true=있음, false=없음)
+  const [dbSyncAvailable, setDbSyncAvailable] = useState<boolean | null>(null);
 
   const isInitialMount = useRef(true);
   const PAGE_SIZE = 20;
@@ -172,6 +176,37 @@ export function LibraryProvider({
 
     isInitialMount.current = false;
   }, [initialLibraryName]);
+
+  // DB → localStorage 동기화: 책 데이터가 로드될 때 read_at 컬럼 감지 및 병합
+  useEffect(() => {
+    if (!data || !libraryName) return;
+    const flat = data.pages.flatMap(page => page.data || []);
+    if (flat.length === 0) return;
+
+    // read_at 컬럼 존재 여부: Supabase select('*')는 존재하지 않는 컬럼을 반환하지 않음
+    const columnExists = 'read_at' in flat[0];
+    setDbSyncAvailable(columnExists);
+
+    if (!columnExists) return;
+
+    // DB에 읽음 기록이 있는 책만 localStorage에 병합 (없는 것은 건드리지 않음)
+    setReadDates(prev => {
+      const next = { ...prev };
+      let changed = false;
+      flat.forEach(book => {
+        if (!book.id || !book.read_at) return;
+        // DB 값이 있고 localStorage에 없거나, DB가 더 최신인 경우 적용
+        if (!next[book.id] || next[book.id] < book.read_at) {
+          next[book.id] = book.read_at;
+          changed = true;
+        }
+      });
+      if (changed) {
+        try { localStorage.setItem(`read_books_${libraryName}`, JSON.stringify(next)); } catch { /* 무시 */ }
+      }
+      return changed ? next : prev;
+    });
+  }, [data, libraryName]);
 
   const setLibrary = useCallback(async (name: string, primaryLib?: LibraryInfo) => {
     const finalName = normalizeName(name);
@@ -330,9 +365,10 @@ export function LibraryProvider({
   }, [queryClient, libraryName, sortColumn, sortOrder]);
 
   const markBookAsRead = useCallback(async (bookId: number, isRead: boolean) => {
+    // 호출 측에서 타임스탬프를 생성하여 localStorage와 DB의 값을 일치시킴
     const newReadAt = isRead ? new Date().toISOString() : null;
 
-    // 1) localStorage 즉시 업데이트 (기본 저장소)
+    // 1) localStorage 즉시 업데이트 (낙관적 UI)
     setReadDates(prev => {
       const next = { ...prev };
       if (isRead && newReadAt) next[bookId] = newReadAt;
@@ -343,11 +379,31 @@ export function LibraryProvider({
       return next;
     });
 
-    // 2) DB에도 저장 시도 (컬럼 없으면 조용히 실패)
-    try {
-      await markBookAsReadAction(bookId, isRead, libraryName || '');
-    } catch { /* DB 컬럼 미존재 시 조용히 무시 */ }
-  }, [libraryName]);
+    // 2) DB 저장 시도 — 결과를 확인하여 동기화 상태 갱신
+    if (libraryName) {
+      const result = await markBookAsReadAction(bookId, isRead, libraryName, newReadAt);
+      if (result.success) {
+        setDbSyncAvailable(true);
+        // DB 성공 시 React Query 캐시도 동기화 (refetch 없이 즉시 반영)
+        const queryKey = ['books', libraryName, sortColumn, sortOrder];
+        queryClient.setQueryData(queryKey, (oldData: InfiniteData<{ data: SavedBook[]; totalCount: number }> | undefined) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map(page => ({
+              ...page,
+              data: page.data.map((b: SavedBook) =>
+                b.id === bookId ? { ...b, read_at: newReadAt } : b
+              )
+            }))
+          };
+        });
+      } else {
+        // DB 컬럼 없거나 권한 오류 → localStorage만 사용 중임을 표시
+        setDbSyncAvailable(false);
+      }
+    }
+  }, [libraryName, sortColumn, sortOrder, queryClient]);
 
   return (
     <LibraryContext.Provider value={{
@@ -372,6 +428,7 @@ export function LibraryProvider({
       removeBookOptimistic,
       updateBookOptimistic,
       markBookAsRead,
+      dbSyncAvailable,
       sortColumn,
       sortOrder,
       setSort

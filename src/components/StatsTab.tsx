@@ -8,11 +8,12 @@ import { ChevronLeft, ChevronRight, BookCheck, BookOpen, Library, X } from 'luci
 interface StatsTabProps {
   savedBooks: SavedBook[];
   onSelectBook: (book: SavedBook) => void;
+  dbSyncAvailable?: boolean | null; // null=감지중, true=DB동기화됨, false=로컬전용
 }
 
 const MONTH_LABELS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 
-const StatsTab: React.FC<StatsTabProps> = ({ savedBooks, onSelectBook }) => {
+const StatsTab: React.FC<StatsTabProps> = ({ savedBooks, onSelectBook, dbSyncAvailable }) => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [expandedMonth, setExpandedMonth] = useState<number | null>(null);
@@ -59,6 +60,19 @@ const StatsTab: React.FC<StatsTabProps> = ({ savedBooks, onSelectBook }) => {
       <div>
         <h2 className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">📊 독서 통계</h2>
         <p className="text-xs text-zinc-400 mt-0.5">읽은 책을 기반으로 통계를 보여드립니다</p>
+        {/* DB 동기화 상태 배지 */}
+        {dbSyncAvailable === true && (
+          <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            다기기 동기화 활성
+          </span>
+        )}
+        {dbSyncAvailable === false && (
+          <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+            이 기기만 저장됨
+          </span>
+        )}
       </div>
 
       {/* 요약 카드 3개 */}

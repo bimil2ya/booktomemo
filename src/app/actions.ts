@@ -122,10 +122,11 @@ export async function saveBookAction(book: { owner_name: string; isbn: string; t
   }
 }
 
-export async function markBookAsReadAction(id: number, isRead: boolean, owner_name: string) {
+export async function markBookAsReadAction(id: number, isRead: boolean, owner_name: string, readAt?: string | null) {
   try {
     await verifySession(owner_name);
-    const updateData = isRead ? { read_at: new Date().toISOString() } : { read_at: null };
+    // 호출 측에서 타임스탬프를 넘기면 그것을 사용 (일관성 보장)
+    const updateData = isRead ? { read_at: readAt ?? new Date().toISOString() } : { read_at: null };
     const { error } = await getSupabase().from('books').update(updateData).eq('id', id).eq('owner_name', owner_name);
     if (error) throw error;
     return { success: true, error: null };
