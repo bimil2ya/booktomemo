@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { SavedBook } from '@/types';
 import BookThumbnail from './BookThumbnail';
-import { Trash2, Edit2, Check, X } from 'lucide-react';
+import { Trash2, Edit2, Check, X, BookOpen, BookCheck } from 'lucide-react';
 import { updateBookAction } from '@/app/actions';
 import { useLibrary } from '@/context/LibraryContext';
 import { useToast } from '@/context/ToastContext';
@@ -23,7 +23,7 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
   selectedIds, onToggleSelect, viewMode = 'grid',
   onAuthorClick
 }) => {
-  const { libraryName, updateBookOptimistic } = useLibrary();
+  const { libraryName, updateBookOptimistic, markBookAsRead } = useLibrary();
   const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<SavedBook>>({});
@@ -32,6 +32,17 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
 
   const isSelected = selectedIds.includes(book.id!);
   const isGrid = viewMode === 'grid';
+  const isRead = !!book.read_at;
+
+  const handleToggleRead = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!book.id || book.id < 0) {
+      showToast('아직 서버에 저장 중인 책입니다. 잠시 후 다시 시도해 주세요.', 'info');
+      return;
+    }
+    await markBookAsRead(book.id, !isRead);
+    showToast(!isRead ? '읽은 책으로 표시했습니다 ✓' : '읽음 표시를 해제했습니다');
+  };
 
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -105,8 +116,12 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
 
       <div
         onClick={() => !isSwiping && !isEditing && onSelect()}
-        className={'flex flex-col transition-transform duration-300 cursor-pointer overflow-hidden h-full ' + (isSwiping ? '-translate-x-1/2' : 'translate-x-0') + ' ' + (isGrid ? 'bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm rounded-3xl' : 'bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-zinc-100/50 dark:border-zinc-800/30')}
+        className={'flex flex-col transition-transform duration-300 cursor-pointer overflow-hidden h-full ' + (isSwiping ? '-translate-x-1/2' : 'translate-x-0') + ' ' + (isGrid ? 'bg-white dark:bg-zinc-900 border shadow-sm rounded-3xl ' + (isRead ? 'border-emerald-200 dark:border-emerald-800' : 'border-zinc-100 dark:border-zinc-800') : 'bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-800/60 border border-zinc-100/50 dark:border-zinc-800/30')}
       >
+        {/* 읽음 표시 왼쪽 컬러바 (그리드 모드) */}
+        {isGrid && isRead && (
+          <div className="h-1 w-full bg-emerald-400 dark:bg-emerald-600 rounded-t-3xl" />
+        )}
         <div className={'flex gap-4 relative ' + (isGrid ? 'p-4' : 'py-4 px-5')}>
           {/* 그리드형에서만 표지 노출 */}
           {isGrid && (
@@ -144,17 +159,30 @@ const LibraryBookCard: React.FC<LibraryBookCardProps> = ({
                     book.authors ? renderAuthors() : <span className="text-zinc-400 text-[11px]">저자 정보 없음</span>
                   )}
                   <span className='text-zinc-300 dark:text-zinc-700'>·</span>
-                  <p className='text-zinc-400 text-[10px] truncate'>
+                  <p className='text-zinc-400 text-[10px] truncate flex items-center gap-1'>
                     {book.publisher || '출판사 미상'} · {book.created_at ? new Date(book.created_at).toLocaleDateString() : '날짜 정보 없음'}
+                    {isRead && <span className='inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-full text-[9px] font-bold ml-1'>✓ 읽음</span>}
                   </p>
                 </div>
             </div>
 
-            {/* 그리드형에서만 연필 버튼 노출 */}
+            {/* 그리드형에서만 연필 버튼 + 읽음 버튼 노출 */}
             {isGrid && (
-              <div className='flex items-center justify-end gap-1 mt-2'>
+              <div className='flex items-center justify-between gap-1 mt-2'>
+                {/* 읽음 토글 버튼 */}
+                <button
+                  onClick={handleToggleRead}
+                  className={'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ' + (isRead ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700')}
+                >
+                  {isRead ? <BookCheck className='w-3.5 h-3.5' /> : <BookOpen className='w-3.5 h-3.5' />}
+                  {isRead ? (book.read_at ? new Date(book.read_at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 읽음' : '읽음') : '읽음 표시'}
+                </button>
+                {/* 편집 버튼 */}
                 {isEditing ? (
-                  <><button onClick={handleSaveEdit} className='p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors'><Check className='w-4 h-4'/></button><button onClick={(e) => { e.stopPropagation(); setIsEditing(false); }} className='p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl'><X className='w-4 h-4'/></button></>
+                  <div className='flex gap-1'>
+                    <button onClick={handleSaveEdit} className='p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors'><Check className='w-4 h-4'/></button>
+                    <button onClick={(e) => { e.stopPropagation(); setIsEditing(false); }} className='p-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl'><X className='w-4 h-4'/></button>
+                  </div>
                 ) : (
                   <button onClick={handleStartEdit} className='p-2 text-zinc-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors'><Edit2 className='w-4 h-4'/></button>
                 )}

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.5.3";
+const VERSION = "경호v2.5.6";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -31,6 +31,7 @@ import BookDetailModal from '@/components/BookDetailModal';
 import UsageGuideModal from '@/components/UsageGuideModal';
 import BottomNav from '@/components/BottomNav';
 import PWAInstallGuide from '@/components/PWAInstallGuide';
+import StatsTab from '@/components/StatsTab';
 import { BookCardSkeleton } from '@/components/Skeleton';
 
 export default function Home() {
@@ -53,7 +54,7 @@ export default function Home() {
   } = useLibrary();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'search' | 'library'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'library' | 'stats'>('search');
   const [query, setQuery] = useState('');
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(false);
@@ -365,7 +366,12 @@ export default function Home() {
       />
 
       <main className="max-w-4xl mx-auto">
-        {activeTab === 'search' ? (
+        {activeTab === 'stats' ? (
+          <StatsTab
+            savedBooks={savedBooks}
+            onSelectBook={(book) => { setSelectedBook(book); setSelectedBookId(book.id || null); }}
+          />
+        ) : activeTab === 'search' ? (
           <div className="space-y-8 px-4">
             <BookSearchBar 
               query={query} setQuery={setQuery} 

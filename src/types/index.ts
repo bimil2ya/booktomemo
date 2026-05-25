@@ -10,6 +10,7 @@ export interface Book {
 export interface SavedBook {
   id?: number;
   created_at?: string;
+  read_at?: string | null;
   isbn: string;
   title: string;
   authors: string;

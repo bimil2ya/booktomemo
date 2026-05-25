@@ -3,13 +3,14 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { SavedBook, SortColumn, SortOrder, LibraryInfo } from '@/types';
 import { normalizeName } from '@/utils/name';
-import { 
-  getBooksAction, 
-  setLibraryCookieAction, 
+import {
+  getBooksAction,
+  setLibraryCookieAction,
   clearLibraryCookieAction,
   checkLibraryExistsAction,
   verifyLibraryPasswordAction,
-  createLibraryAction
+  createLibraryAction,
+  markBookAsReadAction
 } from '@/app/actions';
 import { useInfiniteQuery, useQueryClient, InfiniteData } from '@tanstack/react-query';
 
@@ -38,6 +39,9 @@ interface LibraryContextType {
   addBookOptimistic: (book: SavedBook) => number | string;
   removeBookOptimistic: (bookId: number) => void;
   updateBookOptimistic: (bookId: number, data: Partial<SavedBook>) => void;
+
+  // 읽음 상태 토글
+  markBookAsRead: (bookId: number, isRead: boolean) => Promise<void>;
   
   // Sorting state for React Query key
   sortColumn: SortColumn;
@@ -62,7 +66,10 @@ export function LibraryProvider({
   
   const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  
+
+  // 읽음 상태 localStorage 캐시: { [bookId]: isoDateString }
+  const [readDates, setReadDates] = useState<Record<number, string>>({});
+
   const isInitialMount = useRef(true);
   const PAGE_SIZE = 20;
 
@@ -95,14 +102,19 @@ export function LibraryProvider({
     staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
   });
 
-  // Flattened books from all pages (useMemo optimized)
+  // Flattened books from all pages (useMemo optimized), localStorage readDates 병합
   const savedBooks = useMemo(() => {
     if (!data) return [];
-    return data.pages.reduce((acc: SavedBook[], page) => {
+    const flat = data.pages.reduce((acc: SavedBook[], page) => {
       if (page.data) return [...acc, ...page.data];
       return acc;
     }, []);
-  }, [data]);
+    // localStorage 읽음 상태 우선 병합
+    return flat.map(book => ({
+      ...book,
+      read_at: book.id && readDates[book.id] ? readDates[book.id] : (book.read_at ?? null)
+    }));
+  }, [data, readDates]);
 
   const totalBooksCount = data?.pages[0]?.totalCount || 0;
 
@@ -147,6 +159,15 @@ export function LibraryProvider({
       if (history) JSON.parse(history); // 유효성 검사만 수행
     } catch (e) {
       localStorage.removeItem('library_history'); // 깨진 데이터 삭제
+    }
+
+    // 읽음 상태 복구
+    const name = initialLibraryName || localStorage.getItem('library_owner_name');
+    if (name) {
+      try {
+        const stored = localStorage.getItem(`read_books_${name}`);
+        if (stored) setReadDates(JSON.parse(stored));
+      } catch { /* 무시 */ }
     }
 
     isInitialMount.current = false;
@@ -194,22 +215,26 @@ export function LibraryProvider({
   }, [myPrimaryLib, setLibrary]);
 
   const logout = useCallback(async () => {
+    if (libraryName) {
+      // 로그아웃 시 읽음 상태는 유지 (재로그인 후 복구됨)
+    }
     setLibraryName(null);
     setMyPrimaryLib(null);
     setSelectedRegion('31');
     setSelectedSubRegion('31130');
-    
+    setReadDates({});
+
     queryClient.clear();
-    
+
     localStorage.removeItem('library_owner_name');
     localStorage.removeItem('my_primary_lib');
     localStorage.removeItem('my_region');
     localStorage.removeItem('my_sub_region');
     localStorage.removeItem('last_search_query');
     localStorage.removeItem('save_mode');
-    
+
     await clearLibraryCookieAction();
-  }, [queryClient]);
+  }, [queryClient, libraryName]);
 
   // 세션 만료 감지: queryFn 밖에서 처리하여 React Query 순수성 유지
   useEffect(() => {
@@ -304,6 +329,26 @@ export function LibraryProvider({
     });
   }, [queryClient, libraryName, sortColumn, sortOrder]);
 
+  const markBookAsRead = useCallback(async (bookId: number, isRead: boolean) => {
+    const newReadAt = isRead ? new Date().toISOString() : null;
+
+    // 1) localStorage 즉시 업데이트 (기본 저장소)
+    setReadDates(prev => {
+      const next = { ...prev };
+      if (isRead && newReadAt) next[bookId] = newReadAt;
+      else delete next[bookId];
+      if (libraryName) {
+        try { localStorage.setItem(`read_books_${libraryName}`, JSON.stringify(next)); } catch { /* 무시 */ }
+      }
+      return next;
+    });
+
+    // 2) DB에도 저장 시도 (컬럼 없으면 조용히 실패)
+    try {
+      await markBookAsReadAction(bookId, isRead, libraryName || '');
+    } catch { /* DB 컬럼 미존재 시 조용히 무시 */ }
+  }, [libraryName]);
+
   return (
     <LibraryContext.Provider value={{
       libraryName,
@@ -326,6 +371,7 @@ export function LibraryProvider({
       addBookOptimistic,
       removeBookOptimistic,
       updateBookOptimistic,
+      markBookAsRead,
       sortColumn,
       sortOrder,
       setSort

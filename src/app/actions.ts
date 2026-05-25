@@ -122,6 +122,18 @@ export async function saveBookAction(book: { owner_name: string; isbn: string; t
   }
 }
 
+export async function markBookAsReadAction(id: number, isRead: boolean, owner_name: string) {
+  try {
+    await verifySession(owner_name);
+    const updateData = isRead ? { read_at: new Date().toISOString() } : { read_at: null };
+    const { error } = await getSupabase().from('books').update(updateData).eq('id', id).eq('owner_name', owner_name);
+    if (error) throw error;
+    return { success: true, error: null };
+  } catch (e) {
+    return { success: false, error: handleSupabaseError(e, '읽음 상태 변경') };
+  }
+}
+
 export async function updateBookAction(id: number, editData: { title?: string; authors?: string; publisher?: string; personal_memo?: string }, owner_name: string) {
   try {
     await verifySession(owner_name);
