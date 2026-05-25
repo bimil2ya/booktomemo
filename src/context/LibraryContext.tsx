@@ -13,6 +13,7 @@ import {
   markBookAsReadAction
 } from '@/app/actions';
 import { useInfiniteQuery, useQueryClient, InfiniteData } from '@tanstack/react-query';
+import { useToast } from '@/context/ToastContext';
 
 
 interface LibraryContextType {
@@ -61,6 +62,7 @@ export function LibraryProvider({
   initialLibraryName: string | null;
 }) {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [libraryName, setLibraryName] = useState<string | null>(initialLibraryName);
   const [myPrimaryLib, setMyPrimaryLib] = useState<LibraryInfo | null>(null);
   const [selectedRegion, setSelectedRegion] = useState('31');
@@ -276,10 +278,11 @@ export function LibraryProvider({
     if (queryError instanceof Error) {
       const msg = queryError.message;
       if (msg.includes('세션이 만료') || msg.includes('인증 세션')) {
+        showToast('세션이 만료됐습니다. 다시 로그인해 주세요.', 'error');
         logout();
       }
     }
-  }, [queryError, logout]);
+  }, [queryError, logout, showToast]);
 
   const updatePrimaryLib = useCallback((lib: LibraryInfo, region: string, subRegion: string) => {
     setMyPrimaryLib(lib);

@@ -21,6 +21,13 @@ export default function Providers({
         staleTime: 1000 * 60 * 5,
         // 윈도우 포커스 시 자동으로 리페칭하는 기능 끄기 (모바일 앱 경험 위주)
         refetchOnWindowFocus: false,
+        // 일시적 네트워크 오류 시 1회 자동 재시도 (기본값 3은 과도)
+        retry: 1,
+        retryDelay: 1000,
+      },
+      mutations: {
+        // mutation은 재시도 금지: 중복 저장/삭제 등 부작용 방지
+        retry: 0,
       },
     },
   }));
