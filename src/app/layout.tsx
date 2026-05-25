@@ -4,6 +4,8 @@ import "./globals.css";
 import { cookies } from "next/headers";
 import Providers from "@/components/Providers";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,6 +56,8 @@ export default async function RootLayout({
         <Providers initialLibraryName={initialLibraryName}>
           {children}
         </Providers>
+        <Analytics />
+        <SpeedInsights />
         <Script id="register-sw" strategy="afterInteractive">{`if ("serviceWorker" in navigator) { window.addEventListener("load", function() { navigator.serviceWorker.register("/sw.js"); }); }`}</Script>
       </body>
     </html>
