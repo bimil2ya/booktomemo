@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.5.6";
+const VERSION = "경호v2.5.7";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -66,6 +66,13 @@ export default function Home() {
   const [searchWithin, setSearchWithin] = useState(false);
   const [hasMoreSearch, setHasMoreSearch] = useState(false);
   const [savingIsbn, setSavingIsbn] = useState<string | null>(null);
+
+  // 자동완성 state
+  const [suggestions, setSuggestions] = useState<Book[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsTotal, setSuggestionsTotal] = useState(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -147,6 +154,7 @@ export default function Home() {
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
+    setShowSuggestions(false); // 드롭다운 닫기
 
     let finalQuery = query.trim();
     if (searchWithin && searchStateRef.current.lastPerformedQuery) {
@@ -202,6 +210,51 @@ export default function Home() {
       (book.personal_memo && book.personal_memo.toLowerCase().includes(q))
     );
   }, [savedBooks, libSearchQuery]);
+
+  // 자동완성: 타이핑 핸들러 (debounce 400ms)
+  const handleQueryChange = useCallback((value: string) => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+    if (value.trim().length < 2) {
+      setSuggestions([]);
+      setSuggestionsTotal(0);
+      setShowSuggestions(false);
+      setSuggestionsLoading(false);
+      return;
+    }
+
+    setSuggestionsLoading(true);
+    setShowSuggestions(true);
+
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const { data, meta, error } = await searchBooksAction(value.trim(), libraryName || '', 1, 6);
+        if (!error && data) {
+          setSuggestions(data);
+          setSuggestionsTotal(meta?.pageable_count || 0);
+        } else {
+          setSuggestions([]);
+        }
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 400);
+  }, [libraryName]);
+
+  // 자동완성: 항목 클릭 → BookDetailModal 오픈
+  const handleSuggestionSelect = useCallback((book: Book) => {
+    setShowSuggestions(false);
+    setSelectedBook(book);
+    setSelectedBookId(null);
+  }, []);
+
+  // 자동완성: "전체 결과 보기" 클릭 → 기존 검색 실행
+  const handleSuggestionFullSearch = useCallback(() => {
+    setShowSuggestions(false);
+    if (query.trim()) performSearch(query.trim());
+  }, [query, performSearch]);
 
   const handleAuthorClick = useCallback((author: string) => {
     const cleanName = author.split(/[(\[]/)[0].trim();
@@ -373,8 +426,8 @@ export default function Home() {
           />
         ) : activeTab === 'search' ? (
           <div className="space-y-8 px-4">
-            <BookSearchBar 
-              query={query} setQuery={setQuery} 
+            <BookSearchBar
+              query={query} setQuery={setQuery}
               onSearch={handleSearch}
               loading={loading}
               searchWithin={searchWithin}
@@ -384,6 +437,14 @@ export default function Home() {
               totalSearchCount={totalSearchCount}
               onBack={goBackSearch}
               canGoBack={searchHistory.length > 0}
+              onQueryChange={handleQueryChange}
+              suggestions={suggestions}
+              showSuggestions={showSuggestions}
+              suggestionsLoading={suggestionsLoading}
+              suggestionsTotal={suggestionsTotal}
+              onSuggestionSelect={handleSuggestionSelect}
+              onFullSearch={handleSuggestionFullSearch}
+              onSuggestionsClose={() => setShowSuggestions(false)}
             />
 
             <div className="grid gap-3 max-w-lg mx-auto">
