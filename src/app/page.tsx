@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.7.0";
+const VERSION = "경호v2.7.1";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -230,20 +230,10 @@ export default function Home() {
 
     debounceTimerRef.current = setTimeout(async () => {
       try {
-        // 20개 요청 → 클라이언트에서 제목 포함 필터 후 상위 6개만 사용
-        // (Kakao Book API는 target 파라미터 미지원이므로 클라이언트 필터링으로 대응)
-        const { data, meta, error } = await searchBooksAction(value.trim(), libraryName || '', 1, 20);
+        // target='title'로 제목 한정 검색 → 카카오 관련성 순위 그대로 사용
+        const { data, meta, error } = await searchBooksAction(value.trim(), libraryName || '', 1, 6, 'title');
         if (!error && data) {
-          const q = value.trim().toLowerCase();
-          const filtered = data
-            .filter((book: Book) => book.title.toLowerCase().includes(q)) // 제목에 검색어 포함된 것만
-            .sort((a: Book, b: Book) => {                                   // 제목이 검색어로 시작하면 우선
-              const aPrefix = a.title.toLowerCase().startsWith(q) ? 0 : 1;
-              const bPrefix = b.title.toLowerCase().startsWith(q) ? 0 : 1;
-              return aPrefix - bPrefix;
-            })
-            .slice(0, 6);                                                   // 최대 6개
-          setSuggestions(filtered);
+          setSuggestions(data.slice(0, 6));
           setSuggestionsTotal(meta?.pageable_count || 0);
         } else {
           setSuggestions([]);
