@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Book, SavedBook, AvailabilityStatus, LibraryInfo } from '@/types';
+import { Book, SavedBook, AvailabilityStatus, LibraryInfo, OriginalBookInfo } from '@/types';
 import BookThumbnail from './BookThumbnail';
-import { X, Building2, Loader2, Check, BookOpen, Edit2, Save } from 'lucide-react';
+import { X, Building2, Loader2, Check, BookOpen, Edit2, Save, Languages, ExternalLink } from 'lucide-react';
 import { useLibrary } from '@/context/LibraryContext';
 import { useToast } from '@/context/ToastContext';
-import { updateBookAction } from '@/app/actions';
+import { findOriginalBookAction, updateBookAction } from '@/app/actions';
 
 interface BookDetailModalProps {
   book: Book | SavedBook;
@@ -25,6 +25,8 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const { showToast } = useToast();
   const [memo, setMemo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [originals, setOriginals] = useState<OriginalBookInfo[] | null>(null);
+  const [isFindingOriginal, setIsFindingOriginal] = useState(false);
   const isSavedBook = 'id' in book;
   const isCurrentlySaving = savingIsbn === book.isbn;
 
@@ -33,6 +35,11 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
       setMemo((book as SavedBook).personal_memo || '');
     }
   }, [book, isSavedBook]);
+
+  useEffect(() => {
+    setOriginals(null);
+    setIsFindingOriginal(false);
+  }, [book.isbn, book.title]);
 
   const handleSaveMemo = async () => {
     if (!isSavedBook || !book.id) return;
@@ -61,6 +68,30 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   const searchQuery = `${book.title} ${firstAuthor || ''}`.trim();
   const kyoboUrl = `https://search.kyobobook.co.kr/search?keyword=${encodeURIComponent(searchQuery)}`;
   const libUrl = myPrimaryLib?.homepage || '';
+
+  const handleFindOriginal = async () => {
+    if (!libraryName) return;
+    setIsFindingOriginal(true);
+    try {
+      const { data, error } = await findOriginalBookAction({
+        title: book.title,
+        authors: book.authors,
+        isbn: book.isbn,
+        contents: book.contents,
+        owner_name: libraryName
+      });
+
+      if (error) throw new Error(error);
+      setOriginals(data || []);
+      if (!data || data.length === 0) {
+        showToast('원서 후보를 찾지 못했습니다.', 'info');
+      }
+    } catch {
+      showToast('원서 정보 검색 실패 — 잠시 후 다시 시도해 주세요', 'error');
+    } finally {
+      setIsFindingOriginal(false);
+    }
+  };
 
   // 관리자 권한 체크 로직 (공백 무시)
   const isAdmin = () => {
@@ -194,6 +225,86 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
               </div>
             </div>
           )}
+
+          <div className="p-5 bg-zinc-50 dark:bg-zinc-800/50 rounded-3xl border border-zinc-100 dark:border-zinc-800 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-50 font-bold min-w-0">
+                <Languages className="w-4 h-4 text-purple-500 flex-none" />
+                <span className="text-sm truncate">원서 정보</span>
+              </div>
+              <button
+                onClick={handleFindOriginal}
+                disabled={isFindingOriginal}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-purple-600 hover:border-purple-200 transition-all shadow-sm disabled:opacity-50"
+              >
+                {isFindingOriginal ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookOpen className="w-3.5 h-3.5" />}
+                원서 찾기
+              </button>
+            </div>
+
+            {originals === null && (
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                번역본일 가능성이 있는 책은 원제와 원저자 후보를 찾아볼 수 있어요.
+              </p>
+            )}
+
+            {originals && originals.length === 0 && (
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                확인된 원서 후보가 없습니다.
+              </p>
+            )}
+
+            {originals && originals.length > 0 && (
+              <div className="space-y-3">
+                {originals.map((original, index) => {
+                  const externalSearchUrl = `https://www.google.com/search?q=${encodeURIComponent([original.title, original.authors[0], original.isbn].filter(Boolean).join(' '))}`;
+                  return (
+                    <div key={`${original.source}-${original.title}-${index}`} className="p-4 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-zinc-900 dark:text-zinc-50 leading-tight">{original.title}</p>
+                          {original.authors.length > 0 && (
+                            <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mt-1">{original.authors.join(', ')}</p>
+                          )}
+                        </div>
+                        <span className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 rounded-lg text-[9px] font-bold flex-none">
+                          {original.confidence === 'high' ? '높음' : original.confidence === 'medium' ? '보통' : '후보'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        {original.publishedYear && <span className="px-2 py-1 bg-zinc-50 dark:bg-zinc-800/70 rounded-lg">{original.publishedYear}</span>}
+                        {original.publisher && <span className="px-2 py-1 bg-zinc-50 dark:bg-zinc-800/70 rounded-lg">{original.publisher}</span>}
+                        {original.isbn && <span className="px-2 py-1 bg-zinc-50 dark:bg-zinc-800/70 rounded-lg">ISBN {original.isbn}</span>}
+                        <span className="px-2 py-1 bg-zinc-50 dark:bg-zinc-800/70 rounded-lg">{original.source}</span>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        {original.sourceUrl && (
+                          <a
+                            href={original.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 py-2 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            정보 보기
+                          </a>
+                        )}
+                        <a
+                          href={externalSearchUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          웹 검색
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-50 font-bold border-b border-zinc-100 dark:border-zinc-800 pb-2">

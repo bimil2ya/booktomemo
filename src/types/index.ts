@@ -21,6 +21,18 @@ export interface SavedBook {
   owner_name: string;
 }
 
+export interface OriginalBookInfo {
+  title: string;
+  authors: string[];
+  isbn?: string;
+  publisher?: string;
+  publishedYear?: string;
+  language?: string;
+  source: 'Open Library' | 'Google Books' | '국립중앙도서관' | '알라딘';
+  sourceUrl?: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
 export interface LibraryInfo {
   libCode: string;
   libName: string;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'book-memo-v2.5.8';
+const CACHE_NAME = 'book-memo-v2.7.0';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icon.png'
