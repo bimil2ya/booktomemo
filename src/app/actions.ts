@@ -378,13 +378,15 @@ export async function findOriginalBookAction(book: { title: string; authors: str
       });
     }
 
-    // 4. Open Library + Google Books — 영문 저자명 추출 후 텍스트 검색
-    // 한국어 제목은 영어 DB에서 검색되지 않으므로 저자명만 사용
+    // 4. Open Library + Google Books — 텍스트 검색 (제목/저자 조합)
     const primaryAuthor = authors[0]?.split(/[(\[]/)[0].trim();
-    const englishAuthor = primaryAuthor && /[a-zA-Z]/.test(primaryAuthor) ? primaryAuthor : null;
-    const textQueries = englishAuthor ? [englishAuthor] : [];
+    const textQueries = Array.from(new Set([
+      primaryAuthor ? `${title} ${primaryAuthor}` : title,
+      primaryAuthor || title,
+    ]));
 
     for (const query of textQueries) {
+      const baseConfidence: OriginalBookInfo['confidence'] = query === primaryAuthor ? 'low' : 'medium';
       const [openLibraryRes, googleRes] = await Promise.allSettled([
         axios.get('https://openlibrary.org/search.json', {
           params: {
@@ -408,7 +410,7 @@ export async function findOriginalBookAction(book: { title: string; authors: str
 
       if (openLibraryRes.status === 'fulfilled') {
         ((openLibraryRes.value.data?.docs || []) as OpenLibraryDoc[])
-          .map(doc => openLibraryDocToOriginal(doc, 'low'))
+          .map(doc => openLibraryDocToOriginal(doc, baseConfidence))
           .filter((item): item is OriginalBookInfo => !!item)
           .filter(item => !containsKorean(item.title))
           .forEach(item => candidates.push({ ...item, language: item.language === 'eng' ? 'en' : item.language }));
@@ -416,7 +418,7 @@ export async function findOriginalBookAction(book: { title: string; authors: str
 
       if (googleRes.status === 'fulfilled') {
         ((googleRes.value.data?.items || []) as GoogleBooksVolume[])
-          .map(volume => googleVolumeToOriginal(volume, 'low'))
+          .map(volume => googleVolumeToOriginal(volume, baseConfidence))
           .filter((item): item is OriginalBookInfo => !!item)
           .filter(item => item.language === 'en' && !containsKorean(item.title))
           .forEach(item => candidates.push(item));
