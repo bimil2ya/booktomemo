@@ -120,36 +120,43 @@ function extractAladinOriginalAuthors(authorText: string): string[] {
 
 async function searchAladin(title: string, isbn?: string): Promise<OriginalBookInfo[]> {
   const apiKey = process.env.ALADIN_TTB_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) {
+    console.warn('[Aladin] ALADIN_TTB_KEY missing');
+    return [];
+  }
   try {
     let item: AladinItem | null = null;
 
     if (isbn) {
       const res = await axios.get('https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx', {
         params: { ttbkey: apiKey, itemIdType: 'ISBN13', ItemId: isbn, output: 'js', Version: '20131101' },
-        timeout: 5000,
+        timeout: 8000,
       });
       item = (res.data?.item?.[0] as AladinItem) ?? null;
+      if (!item) console.warn(`[Aladin] ItemLookUp empty for ISBN=${isbn}`);
     }
 
     // ISBN 매칭 실패 또는 subInfo 누락 시: ItemSearch로 ISBN 재탐색 → ItemLookUp 재호출
     if (!item?.subInfo?.originalTitle) {
       const searchRes = await axios.get('https://www.aladin.co.kr/ttb/api/ItemSearch.aspx', {
         params: { ttbkey: apiKey, Query: title, QueryType: 'Title', SearchTarget: 'Book', output: 'js', Version: '20131101', MaxResults: 1 },
-        timeout: 5000,
+        timeout: 8000,
       });
       const candidateIsbn = (searchRes.data?.item?.[0] as AladinItem)?.isbn13;
       if (candidateIsbn && candidateIsbn !== isbn) {
         const lookupRes = await axios.get('https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx', {
           params: { ttbkey: apiKey, itemIdType: 'ISBN13', ItemId: candidateIsbn, output: 'js', Version: '20131101' },
-          timeout: 5000,
+          timeout: 8000,
         });
         item = (lookupRes.data?.item?.[0] as AladinItem) ?? item;
       }
     }
 
     const rawOriginalTitle = item?.subInfo?.originalTitle;
-    if (!rawOriginalTitle || containsKorean(rawOriginalTitle)) return [];
+    if (!rawOriginalTitle || containsKorean(rawOriginalTitle)) {
+      console.warn(`[Aladin] subInfo.originalTitle missing/korean for title="${title}" isbn=${isbn}`);
+      return [];
+    }
 
     return [{
       title: cleanAladinOriginalTitle(rawOriginalTitle),
@@ -162,7 +169,9 @@ async function searchAladin(title: string, isbn?: string): Promise<OriginalBookI
       sourceUrl: item?.link,
       confidence: 'high',
     }];
-  } catch {
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    console.warn(`[Aladin] error: code=${err.code} msg=${err.message}`);
     return [];
   }
 }
@@ -191,7 +200,16 @@ function dedupeOriginals(items: OriginalBookInfo[]) {
   });
 }
 
-function scoreOriginalCandidate(item: OriginalBookInfo, translatedTitle: string, translatedAuthors: string[]) {
+function titleTokens(title: string): Set<string> {
+  return new Set(
+    title.toLowerCase()
+      .replace(/[^a-z0-9가-힣\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 3)
+  );
+}
+
+function scoreOriginalCandidate(item: OriginalBookInfo, translatedTitle: string, translatedAuthors: string[], referenceTitles: string[] = []) {
   let score = item.confidence === 'high' ? 80 : item.confidence === 'medium' ? 50 : 25;
   if (item.source === '알라딘' || item.source === '국립중앙도서관') score += 50;
   if (item.language === 'en') score += 20;
@@ -205,6 +223,13 @@ function scoreOriginalCandidate(item: OriginalBookInfo, translatedTitle: string,
   });
   if (item.title.trim() === translatedTitle.trim()) score -= 30;
   if (containsKorean(item.title)) score -= 30;
+  // 알라딘 원서명 토큰과 1개도 안 겹치면 같은 저자 다른 책 의심 → 페널티
+  if (referenceTitles.length > 0 && (item.source === 'Open Library' || item.source === 'Google Books')) {
+    const candidateTokens = titleTokens(item.title);
+    const refTokens = new Set(referenceTitles.flatMap(t => Array.from(titleTokens(t))));
+    const overlap = Array.from(candidateTokens).some(t => refTokens.has(t));
+    if (!overlap) score -= 25;
+  }
   return score;
 }
 
@@ -311,8 +336,17 @@ interface GoogleBooksVolume {
   };
 }
 
+function isMeaningfulTitle(title: string | undefined): title is string {
+  if (!title) return false;
+  const trimmed = title.trim();
+  if (trimmed.length < 3) return false;
+  const lower = trimmed.toLowerCase();
+  if (['unknown', 'untitled', 'no title', 'n/a'].includes(lower)) return false;
+  return true;
+}
+
 function openLibraryDocToOriginal(doc: OpenLibraryDoc, confidence: OriginalBookInfo['confidence']): OriginalBookInfo | null {
-  if (!doc.title) return null;
+  if (!isMeaningfulTitle(doc.title)) return null;
   const isbn = doc.isbn?.find(code => code.length === 13) || doc.isbn?.[0];
   return {
     title: doc.title,
@@ -328,7 +362,7 @@ function openLibraryDocToOriginal(doc: OpenLibraryDoc, confidence: OriginalBookI
 }
 
 function openLibraryEditionToOriginal(edition: OpenLibraryEdition, confidence: OriginalBookInfo['confidence']): OriginalBookInfo | null {
-  if (!edition.title) return null;
+  if (!isMeaningfulTitle(edition.title)) return null;
   const isbn = edition.isbn?.find(code => code.length === 13) || edition.isbn?.[0];
   return {
     title: edition.title,
@@ -345,7 +379,7 @@ function openLibraryEditionToOriginal(edition: OpenLibraryEdition, confidence: O
 
 function googleVolumeToOriginal(volume: GoogleBooksVolume, confidence: OriginalBookInfo['confidence']): OriginalBookInfo | null {
   const info = volume.volumeInfo;
-  if (!info?.title) return null;
+  if (!isMeaningfulTitle(info?.title)) return null;
   const isbn13 = info.industryIdentifiers?.find(item => item.type === 'ISBN_13')?.identifier;
   const isbn10 = info.industryIdentifiers?.find(item => item.type === 'ISBN_10')?.identifier;
   return {
@@ -418,9 +452,13 @@ export async function findOriginalBookAction(book: { title: string; authors: str
       primaryAuthor ? `${title} ${primaryAuthor}` : title,
       primaryAuthor || title,
     ]));
+    // 알라딘이 유효한 영문 원서명을 줬으면 텍스트 검색 결과는 강제 'low' (노이즈 후순위)
+    const aladinHasValidOriginal = aladinResults.some(r => r.title && !containsKorean(r.title));
 
     for (const query of textQueries) {
-      const baseConfidence: OriginalBookInfo['confidence'] = query === primaryAuthor ? 'low' : 'medium';
+      const baseConfidence: OriginalBookInfo['confidence'] = aladinHasValidOriginal
+        ? 'low'
+        : (query === primaryAuthor ? 'low' : 'medium');
       const [openLibraryRes, googleRes] = await Promise.allSettled([
         axios.get('https://openlibrary.org/search.json', {
           params: {
@@ -459,8 +497,9 @@ export async function findOriginalBookAction(book: { title: string; authors: str
       }
     }
 
+    const aladinTitles = aladinResults.map(r => r.title).filter(t => t && !containsKorean(t));
     const ranked = dedupeOriginals(candidates)
-      .sort((a, b) => scoreOriginalCandidate(b, title, authors) - scoreOriginalCandidate(a, title, authors))
+      .sort((a, b) => scoreOriginalCandidate(b, title, authors, aladinTitles) - scoreOriginalCandidate(a, title, authors, aladinTitles))
       .slice(0, 3);
 
     return { data: ranked, error: null };
