@@ -94,40 +94,72 @@ async function searchNationalLibrary(title: string, isbn?: string): Promise<Orig
   }
 }
 
+interface AladinItem {
+  title?: string;
+  author?: string;
+  publisher?: string;
+  pubDate?: string;
+  isbn13?: string;
+  link?: string;
+  subInfo?: { originalTitle?: string; subTitle?: string };
+}
+
+function cleanAladinOriginalTitle(raw: string): string {
+  return raw.replace(/\s*\(\d{4}년?\)\s*$/, '').trim();
+}
+
+function extractAladinOriginalAuthors(authorText: string): string[] {
+  if (!authorText) return [];
+  return authorText
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => /\(지은이\)|\(저자\)|\(글\)|\(원작\)/.test(s))
+    .map(s => s.replace(/\s*\([^)]*\)\s*$/, '').trim())
+    .filter(Boolean);
+}
+
 async function searchAladin(title: string, isbn?: string): Promise<OriginalBookInfo[]> {
   const apiKey = process.env.ALADIN_TTB_KEY;
   if (!apiKey) return [];
   try {
-    let item: Record<string, string> | null = null;
+    let item: AladinItem | null = null;
 
     if (isbn) {
       const res = await axios.get('https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx', {
         params: { ttbkey: apiKey, itemIdType: 'ISBN13', ItemId: isbn, output: 'js', Version: '20131101' },
         timeout: 5000,
       });
-      item = res.data?.item?.[0] ?? null;
+      item = (res.data?.item?.[0] as AladinItem) ?? null;
     }
 
-    if (!item) {
-      const res = await axios.get('https://www.aladin.co.kr/ttb/api/ItemSearch.aspx', {
-        params: { ttbkey: apiKey, Query: title, QueryType: 'Title', SearchTarget: 'Book', output: 'js', Version: '20131101', MaxResults: 3 },
+    // ISBN 매칭 실패 또는 subInfo 누락 시: ItemSearch로 ISBN 재탐색 → ItemLookUp 재호출
+    if (!item?.subInfo?.originalTitle) {
+      const searchRes = await axios.get('https://www.aladin.co.kr/ttb/api/ItemSearch.aspx', {
+        params: { ttbkey: apiKey, Query: title, QueryType: 'Title', SearchTarget: 'Book', output: 'js', Version: '20131101', MaxResults: 1 },
         timeout: 5000,
       });
-      const items: Record<string, string>[] = res.data?.item || [];
-      item = items.find(i => i.originalTitle && !containsKorean(i.originalTitle)) ?? items[0] ?? null;
+      const candidateIsbn = (searchRes.data?.item?.[0] as AladinItem)?.isbn13;
+      if (candidateIsbn && candidateIsbn !== isbn) {
+        const lookupRes = await axios.get('https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx', {
+          params: { ttbkey: apiKey, itemIdType: 'ISBN13', ItemId: candidateIsbn, output: 'js', Version: '20131101' },
+          timeout: 5000,
+        });
+        item = (lookupRes.data?.item?.[0] as AladinItem) ?? item;
+      }
     }
 
-    if (!item?.originalTitle || containsKorean(item.originalTitle)) return [];
+    const rawOriginalTitle = item?.subInfo?.originalTitle;
+    if (!rawOriginalTitle || containsKorean(rawOriginalTitle)) return [];
 
     return [{
-      title: item.originalTitle.trim(),
-      authors: item.originalAuthor ? [item.originalAuthor.trim()] : [],
-      isbn: item.isbn13,
-      publisher: item.publisher,
-      publishedYear: item.pubDate?.slice(0, 4),
+      title: cleanAladinOriginalTitle(rawOriginalTitle),
+      authors: extractAladinOriginalAuthors(item?.author || ''),
+      isbn: item?.isbn13,
+      publisher: item?.publisher,
+      publishedYear: item?.pubDate?.slice(0, 4),
       language: 'en',
       source: '알라딘',
-      sourceUrl: item.link,
+      sourceUrl: item?.link,
       confidence: 'high',
     }];
   } catch {
@@ -161,16 +193,18 @@ function dedupeOriginals(items: OriginalBookInfo[]) {
 
 function scoreOriginalCandidate(item: OriginalBookInfo, translatedTitle: string, translatedAuthors: string[]) {
   let score = item.confidence === 'high' ? 80 : item.confidence === 'medium' ? 50 : 25;
-  if (item.source === '알라딘' || item.source === '국립중앙도서관') score += 25;
+  if (item.source === '알라딘' || item.source === '국립중앙도서관') score += 50;
   if (item.language === 'en') score += 20;
   if (!containsKorean(item.title)) score += 15;
   if (item.isbn) score += 8;
+  if (item.isbn?.startsWith('9780') || item.isbn?.startsWith('9781')) score += 10;
   const authorText = item.authors.join(' ').toLowerCase();
   translatedAuthors.forEach((author) => {
     const clean = author.split(/[(\[]/)[0].trim().toLowerCase();
     if (clean && authorText.includes(clean)) score += 12;
   });
   if (item.title.trim() === translatedTitle.trim()) score -= 30;
+  if (containsKorean(item.title)) score -= 30;
   return score;
 }
 

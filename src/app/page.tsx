@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
-const VERSION = "경호v2.7.2";
+const VERSION = "경호v2.7.3";
 import { Loader2 } from 'lucide-react';
 
 // 서버 액션 및 컨텍스트 임포트
@@ -527,7 +527,13 @@ export default function Home() {
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
       <PWAInstallGuide />
       {currentSelectedBook && (
-        <BookDetailModal book={currentSelectedBook} onClose={() => { setSelectedBook(null); setSelectedBookId(null); }} myPrimaryLib={myPrimaryLib} availabilityStatus={availabilityStatus} onSave={handleSave} savingIsbn={savingIsbn} onAuthorClick={handleAuthorClick} />
+        <BookDetailModal book={currentSelectedBook} onClose={() => {
+          setSelectedBook(null);
+          setSelectedBookId(null);
+          if (query.trim().length >= 2 && suggestions.length > 0) {
+            setShowSuggestions(true);
+          }
+        }} myPrimaryLib={myPrimaryLib} availabilityStatus={availabilityStatus} onSave={handleSave} savingIsbn={savingIsbn} onAuthorClick={handleAuthorClick} />
       )}
       {isGuideOpen && (
         <UsageGuideModal onClose={() => setIsGuideOpen(false)} />

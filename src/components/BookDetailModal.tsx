@@ -83,9 +83,6 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
       if (error) throw new Error(error);
       setOriginals(data || []);
-      if (!data || data.length === 0) {
-        showToast('원서 후보를 찾지 못했습니다.', 'info');
-      }
     } catch {
       showToast('원서 정보 검색 실패 — 잠시 후 다시 시도해 주세요', 'error');
     } finally {
