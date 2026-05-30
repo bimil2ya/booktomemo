@@ -154,7 +154,9 @@ async function searchAladin(title: string, isbn?: string): Promise<OriginalBookI
 
     const rawOriginalTitle = item?.subInfo?.originalTitle;
     if (!rawOriginalTitle || containsKorean(rawOriginalTitle)) {
-      console.warn(`[Aladin] subInfo.originalTitle missing/korean for title="${title}" isbn=${isbn}`);
+      const itemKeys = item ? Object.keys(item).join(',') : 'no-item';
+      const subInfo = JSON.stringify(item?.subInfo || {});
+      console.warn(`[Aladin] originalTitle empty title="${title}" isbn=${isbn} itemKeys=${itemKeys} subInfo=${subInfo}`);
       return [];
     }
 
